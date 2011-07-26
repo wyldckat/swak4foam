@@ -1,0 +1,24 @@
+#! /bin/sh
+
+if [ -d simpleFunctionObjects ]; then 
+    wclean simpleFunctionObjects
+fi
+
+wclean swak4FoamParsers
+
+wclean groovyBC
+
+wclean swakFunctionObjects
+
+wclean simpleSwakFunctionObjects
+
+wclean swakTopoSources
+
+wclean swakSourceFields
+
+wclean swakFiniteArea
+
+wclean groovyStandardBCs
+
+# remove residual from bison
+rm -f */*.output

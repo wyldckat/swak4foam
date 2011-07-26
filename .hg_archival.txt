@@ -1,0 +1,5 @@
+repo: d14c0319d52c0f53e65844bba122846744687a4c
+node: 72ca1b77c54ccf6157be9ae76c043b66e9661312
+branch: port_2.0.x
+latesttag: release2011-04-20
+latesttagdistance: 42

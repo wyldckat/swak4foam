@@ -1,0 +1,14 @@
+#! /bin/sh
+
+wmake funkySetFields
+
+wmake funkySetBoundaryField
+
+wmake replayTransientBC
+
+if [ "$FOAM_DEV" != "" ]
+then
+    wmake funkySetAreaFields
+fi
+
+wmake funkyDoCalc

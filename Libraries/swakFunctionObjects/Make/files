@@ -1,0 +1,12 @@
+manipulateField.C
+manipulateFieldFunctionObject.C
+expressionField.C
+expressionFieldFunctionObject.C
+clearExpressionField.C
+clearExpressionFieldFunctionObject.C
+createSampledSurface.C
+createSampledSurfaceFunctionObject.C
+createSampledSet.C
+createSampledSetFunctionObject.C
+
+LIB = $(FOAM_USER_LIBBIN)/libswakFunctionObjects
