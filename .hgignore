@@ -28,3 +28,6 @@ doc
 
 debian/rules
 debian/control
+
+swakConfiguration
+

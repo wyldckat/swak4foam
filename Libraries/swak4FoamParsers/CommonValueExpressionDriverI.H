@@ -94,17 +94,68 @@ namespace Foam {
     template<class Type>
     bool CommonValueExpressionDriver::isVariable(const string &name,bool isPoint) const
     {
+        if(debug) {
+            Pout << "CommonValueExpressionDriver::isVariable " 
+                << " looking for " << name << " isPoint: " << isPoint;
+        }
+
         if(variables_.found(name)) {
+            if(debug) {
+                Pout << " - name found";
+            }
             if(
                 variables_[name].type()==pTraits<Type>::typeName 
                 && 
                 variables_[name].isPoint()==isPoint
             ) {
+                if(debug) {
+                    Pout << " - OK" << endl;
+                }
+
                 return true;
             } 
         }
 
-        return false;
+        if(debug) {
+            Pout << " - not OK -> trying global" << endl;
+        }
+
+        return isGlobal<Type>(name,isPoint);
+    }
+
+    template<class Type>
+    bool CommonValueExpressionDriver::isGlobal(
+        const word &name,
+        bool isPoint
+    ) const
+    {
+        if(debug) {
+            Pout << "CommonValueExpressionDriver::isGlobal "
+                << " looking for " << name << " isPoint: " << isPoint << flush;
+        }
+
+        const ExpressionResult &aGlobal=lookupGlobal(name);
+
+        if (debug) {
+            Pout << " - found type " << aGlobal.type()  
+                << " isPoint " << isPoint;
+        }
+
+        if(
+            aGlobal.type()==pTraits<Type>::typeName 
+            && 
+            aGlobal.isPoint()==isPoint
+        ) {
+            if(debug) {
+                Pout << " - OK" << endl;
+            }
+            return true;
+        } else {
+            if(debug) {
+                Pout << " - not OK" << endl;
+            }
+            return false;
+        }
     }
 
     template<class Type>
@@ -159,7 +210,7 @@ namespace Foam {
         const polyMesh &mesh=dynamic_cast<const polyMesh &>(theSet->db());
 
         if(debug) {
-            Info << "UpdateSet: " << theSet->name() 
+            Pout << "UpdateSet: " << theSet->name() 
                 << " Id: " << name << " Origin: " << int(origin) << endl;
         }
 
@@ -181,7 +232,7 @@ namespace Foam {
                         header.headerClassName()==T::typeName
                     ) {
                         if(debug) {
-                            Info << "Rereading from " << header.filePath() << endl;
+                            Pout << "Rereading from " << header.filePath() << endl;
                         }
                         theSet.reset(
                             new T(
@@ -202,7 +253,7 @@ namespace Foam {
                     word sName=name;
                     if(mesh.thisDb().foundObject<T>(name)) {
                         if(debug) {
-                            Info << "Found " << name << " and rereading it" << endl;
+                            Pout << "Found " << name << " and rereading it" << endl;
                         }
                         theSet.reset(
                             new T(
@@ -228,12 +279,12 @@ namespace Foam {
                         << abort(FatalError);
             default:
                 if(debug) {
-                    Info << "Origin " << int(origin) << " not implemented" << endl;
+                    Pout << "Origin " << int(origin) << " not implemented" << endl;
                 }
         }
 
         if(debug) {
-            Info << name << " old size " << oldSize << " new: " << theSet->size()
+            Pout << name << " old size " << oldSize << " new: " << theSet->size()
                 << endl;
         }
 
@@ -247,9 +298,9 @@ namespace Foam {
         const word regName=name+"RegisteredNameFor"+T::typeName;
 
         if(debug) {
-            Info << "Looking for " << T::typeName << " named " << name 
+            Pout << "Looking for " << T::typeName << " named " << name 
                 << " or  registered as " << regName << " with mesh ";
-            Info << "Caching: " << cacheSets() 
+            Pout << "Caching: " << cacheSets() 
                 << " Found: " << mesh.foundObject<T>(name)
                 << " Found registered: " << mesh.foundObject<T>(regName) << endl;
         }
@@ -263,9 +314,9 @@ namespace Foam {
             )
         ) {
             if(debug) {
-                Info << "Constructing a new " << T::typeName << " " << name << endl;
+                Pout << "Constructing a new " << T::typeName << " " << name << endl;
                 if(debug>1) {
-                    Info << mesh.thisDb().names();
+                    Pout << mesh.thisDb().names();
                 }
             }
             origin=FILE;
@@ -280,7 +331,7 @@ namespace Foam {
         
             if(cacheSets()) {
                 if(debug) {
-                    Info << "Registering a copy of " << name << " with mesh" << endl;
+                    Pout << "Registering a copy of " << name << " with mesh" << endl;
                 }
                 T* toCache=new T(mesh,regName,s());
                 toCache->store();
@@ -289,7 +340,7 @@ namespace Foam {
         } else {
             if(mesh.thisDb().foundObject<T>(name)) {
                 if(debug) {
-                    Info << "Getting existing " << name << endl;
+                    Pout << "Getting existing " << name << endl;
                 }
 
                 origin=MEMORY;
@@ -303,7 +354,7 @@ namespace Foam {
                 );
             } else {
                 if(debug) {
-                    Info << "Getting existing " << regName << endl;
+                    Pout << "Getting existing " << regName << endl;
                 }
 
                 origin=CACHE;
@@ -361,7 +412,7 @@ namespace Foam {
     )
     {
         if(debug) {
-            Info << "CommonValueExpressionDriver::getOrReadField. Name: " << name 
+            Pout << "CommonValueExpressionDriver::getOrReadField. Name: " << name 
                 << " Type: " << T::typeName << endl;
         }
         
@@ -369,12 +420,16 @@ namespace Foam {
         
         autoPtr<T> f;
         
-        if(variables_.found(name)) {
-            if(debug) {
-                Info << "Getting " << name << " from variables" << endl;
-            }
+        typedef typename T::value_type Type;
             
-            typedef typename T::value_type Type;
+        if(
+            variables_.found(name)
+            ||
+            isGlobal<Type>(name,false)
+        ) {
+            if(debug) {
+                Pout << "Getting " << name << " from variables" << endl;
+            }
             
             f.set(
                 new T(
@@ -392,7 +447,14 @@ namespace Foam {
                 )
             );
 
-            Field<Type> vals=variables_[name].getResult<Type>(true);
+            Field<Type> vals;
+            if(variables_.found(name)) {
+                vals=variables_[name].getResult<Type>(true);
+            } else {
+                vals=const_cast<ExpressionResult &>(
+                    lookupGlobal(name)
+                ).getResult<Type>(true);
+            }
 
             if(debug) {
                 Pout << "sizes: " << vals.size() << " " << f->size() << endl;
@@ -429,7 +491,7 @@ namespace Foam {
             this->mesh().foundObject<T>(name)
         ) {
             if(debug) {
-                Info << "Getting " << name << " from memory" << endl;
+                Pout << "Getting " << name << " from memory" << endl;
             }
 
             f.set(
@@ -443,7 +505,7 @@ namespace Foam {
             getTypeOfField(name)==T::typeName
         ) {
             if(debug) {
-                Info << "Reading " << name << " from disc" << endl;
+                Pout << "Reading " << name << " from disc" << endl;
             }
         
             f.set(
@@ -488,7 +550,7 @@ namespace Foam {
         );
         if(cacheReadFields()) {
             if(debug) {
-                Info << "Registering a copy of " << name << " with mesh" << endl;
+                Pout << "Registering a copy of " << name << " with mesh" << endl;
             }
             T* toCache=new T(f());
             toCache->store();
@@ -500,14 +562,14 @@ namespace Foam {
     bool CommonValueExpressionDriver::CommonValueExpressionDriver::isThere(const string &name) const
     {
         if(debug) {
-            Info << "CommonValueExpressionDriver::isThere. Name: " << name 
+            Pout << "CommonValueExpressionDriver::isThere. Name: " << name 
                 << " Type: " << T::typeName << " searchInMemory: " << searchInMemory()
                 << " searchOnDisc_: " << searchOnDisc() << endl;
         }
         if(searchInMemory()) {
             if(this->mesh().foundObject<T>(name)) {
                 if(debug) {
-                    Info << "Found " << name << " in memory" << endl;
+                    Pout << "Found " << name << " in memory" << endl;
                 }
                 return true;
             }
@@ -519,12 +581,12 @@ namespace Foam {
             getTypeOfField(name)==T::typeName
         ) {
             if(debug) {
-                Info << "Found " << name << " on disc" << endl;
+                Pout << "Found " << name << " on disc" << endl;
             }
             return true;
         } else {
             if(debug) {
-                Info << name << " not found" << endl;
+                Pout << name << " not found" << endl;
             }
             return false;
         }
@@ -658,7 +720,7 @@ namespace Foam {
             << " Parser Error at " << buff.str() << " :"  << m << Foam::endl
                 << content_ << Foam::endl << place
                 << Foam::exit(Foam::FatalError);
-        //    Foam::Info << buff.str() << ": " << m << Foam::endl;
+        //    Foam::Pout << buff.str() << ": " << m << Foam::endl;
     }
 
     inline const HashTable<ExpressionResult,word> &CommonValueExpressionDriver::variables() const
