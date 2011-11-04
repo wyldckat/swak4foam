@@ -289,7 +289,7 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
         );
     }
 
-    updateLibrary();
+    updateLibrary(redirectType_);
     return redirectFunctionObject().read(dict);
 }
 
