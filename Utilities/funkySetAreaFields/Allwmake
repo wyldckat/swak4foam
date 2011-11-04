@@ -1,5 +1,4 @@
 #! /bin/sh
-. $WM_PROJECT_DIR/wmake/scripts/AllwmakeArguments
 
 if [ "$FOAM_DEV" != "" ]; then
     wmake
