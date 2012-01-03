@@ -1,7 +1,21 @@
 # -*- mode: org -*-
+#+TITLE: =README= for =swak4Foam=
 * Description
   A collection of libraries and tools that let the user handle
   OpenFOAM-data based on expressions
+* About this document
+** Scope
+   This file gives an overview of =swak4Foam= and a history of the
+   features. It is not a canonical documentation.
+** Technical
+   This file is written in the mighty =org-mode= (see
+   [[http://orgmode.org/]]) a markup/outline-mode for (X)Emacs. Using this
+   mode it can be easily (using 3 keystrokes ... it's Emacs) to PDF or
+   HTML to make it more readable (and add a table of contents).
+
+   Please don't try to "beautify" it with any other text editor as
+   this will surly mess up the markup (and keeping the file
+   /org-compatible/ outside of the =org-mode= is a pain in the neck.
 * Contributors etc
 ** Original Author
    Bernhard Gschaider (bgschaid@ice-sf.at)
@@ -10,7 +24,11 @@
 ** Contributors 
    In alphabetical order of the surname
    - Peter Keller :: =sprinklerInlet=-case
+   - Andreas Otto :: fixed the =circulatingSplash=-case
    - Alexey Petrov :: =pythonFlu=-integration
+   - Bruno Santos :: Compilation with Intel compiler and Mingw
+   - Martin Becker :: The =potentialPitzDaily=-case (demonstrating a
+                      problem with =groovyBC=)
    If anyone is forgotten: let me know
 
    Contributors to =simpleFunctionObjects= are listed separately in
@@ -19,11 +37,14 @@
    See: http://openfoamwiki.net/index.php/contrib/swak4Foam
 * Installation/Compilation
 ** Requirements
-   - Version 2.0 of OpenFOAM (a version that works with 1.6, 1.6-ext
-     and 1.7 is available separately)
+   - Version 2.0 or 2.1 of OpenFOAM (a version that works with 1.6,
+     1.6-ext and 1.7 is available separately)
      - The =finiteArea=-stuff will probably work with version 2.0-ext
        (once that is available)
    - the compiler generators =bison= and =flex=
+     - =swak4Foam= is known to work with =bison= version 2.3 and
+       higher. Lower versions *may* work. If it works with a lower
+       version please report it
 ** Building
 : wmake all 
    at the base directory should build all the libraries and
@@ -37,6 +58,12 @@
     in a file =swakConfiguration= (an example file
     =swakConfiguration.example= is provided). If that file is not
     present these unconfigured features will not be compiled.
+*** Possible compilation failure with old 2.0.x-versions
+    With older versions of 2.0.x (or 2.0 or 2.0.1) it is possible that
+    the compilation of  =swakCodedFunctionObject= will fail. In that
+    case remove the last parameter to the
+    =codedFunctionObject=-constructor in =swakCodedFunctionObject.C=
+    (it is clearly marked by a comment)
 ** Global installation
    If the libraries and utilities are considered stable and the should
    be available to everyone (without having to recompile them) the
@@ -74,7 +101,11 @@
     The basis of =swak4Foam=: the expression parsers with the logic to
     access the /OpenFOAM/ data-structures.
 
-    None of the other software pieces compile without it
+    None of the other software pieces compile without it.
+
+    Also defines a subclass to =DataEntry= that uses
+    =swak=-expressions and a function object =initSwakFunctionObject=
+    that might be used if this fails
 *** =simpleFunctionObjects=
     A collection of function objects that was previously separately
     available at
@@ -200,8 +231,6 @@ S_{expl} + S_{impl} T
     - Solver :: solidDisplacementFoam
 **** circulatingSplash 
     - Solver :: interDyMFoam 
-    - Remark :: this one crashes halfway through the calculation. If
-                you can fix it: Be my guest
 **** movingConeDistorted
     - Solver :: pimpleDyMFoam
     - Also demonstrates :: =swakExpression= with =surface=. Due to a
@@ -227,6 +256,11 @@ S_{expl} + S_{impl} T
      - Solver :: interFoam
      - Description :: Winner of the =swak4Foam=-competition at the 6th
                       OpenFOAM-Workshop (2011). By Peter Keller
+**** potentialPitzDaily
+     - Solver :: potentialFoam
+     - Description :: Demonstrates the use of =groovyB= with
+                      =potentialFoam= (also a problem connected with
+                      that). Provided by Martin Backer
 *** FunkySetFields
     Example dictionary for =funkySetFields=
 *** FunkySetBoundaryFields
@@ -418,6 +452,10 @@ S_{expl} + S_{impl} T
   for a description of the GNU General Public License terms under which 
   you can copy the files.
 * Known bugs
+  The following list is not complete. If the Artemis extension (see
+  above) is installed then
+: hg ilist
+  gives a more up-to-date list
 ** Moving meshes and =sampledSurfaces= 
    It seems that with moving meshes =sampledSurfaces= don't get
    updated. This seems to be a problem with OpenFOAM itself (the
@@ -440,6 +478,12 @@ S_{expl} + S_{impl} T
 
    Will investigate. Relevant places are marked by comments in the
    code. Also the construction of =sampledSet= seems to loose memory
+** Non-treatment of the inner product =&= of symmetric tensors
+   Before OpenFOAM 2.1 the inner product of two symmetric tensors was
+   a symmetric tensor. Since 2.1 it is a general tensor. As the
+   general treatment in the grammar would be confusing currently the
+   this product was removed from the grammar and therefor will not be
+   correctly parsed
 * History
 ** 2010-09-13
    First Release
@@ -604,4 +648,172 @@ S_{expl} + S_{impl} T
      If a variable is defined and the patch which it is defined on
      doesn't have any faces the variable is reported on that processor
      as /not existing/ and the whole run fails
+** 2012-01-04
+*** Cases changed
+**** =circulatingSplash=
+     Fixed according to a suggestion by Andreas Otto. Now runs again
+     (used to crash some time-steps into the beginning)
+*** Infrastructure
+**** Check for correct =bison=-version
+     The =Allwmake=-script now checks for the correct bison-version
+     (and the existence of =bison=) and fails if it doesn't seem to be
+     the right one
+**** Supply a header with preprocessor-symbols about the used OF-version
+     To allow distinguishing different OF-versions as discussed in the
+     bug report
+     [[http://sourceforge.net/apps/mantisbt/openfoam-extend/view.php?id=114]]
+     the =Allwmake=-script now generates a header file
+     =foamVersion4swak.H= that defines the symbols
+     =FOAM_VERSION4SWAK_MAJOR=, =FOAM_VERSION4SWAK_MINOR= and
+     =FOAM_VERSION4SWAK_PATCH= 
+*** Technical
+**** Refactoring of the FieldDriver
+     - now can also produce surfaceFields
+     - full support of =tensor=, =symmTensor= and =sphericalTensor=
+**** Refactoring of the FaFieldDriver
+     - now can also produce edgeFields
+     No support for tensors yet
+**** Writing of =storedVariables=
+     If necessary (for instance =swakExpression=-functionObject) the
+     =storedVariables= are written to disc (into a subdirectory
+     =swak4Foam= of the timestep) and are reread at the start. This
+     allows consistent restarts (for instance if a flow was summed
+     using the variable) *if the expressions stay the same*.
+**** =simpleFunctionObjects= now write vectors and tensors without brackets
+     Data files can now be written without brackets but each component on
+     its own. The number of entries in the header is not adjusted
+**** A /default mesh/ for the drivers exists
+     For drivers that don't have access to a =fvMesh= a default mesh
+     exists. This default mesh is defined by the first =fvMesh= that
+     is used during the construction of *any* driver.
+
+     Definition of the default mesh can be forced using the
+     =initSwakFunctionObject= (see the test case =flowRateAngledDuct=)
+*** New features
+**** General =phi= in =solveTransportPDE=
+     Due to the refactoring of the =FieldDriver= now =phi= can be
+     specified by a general expression (instead of 'only' a
+     field-name) 
+**** =funkySetFields= now also writes surfaceFields
+     Can write =surfaceVector= and =surfaceScalar=-Fields. Condition
+     has to be consistent
+**** Function objects now =surfaceField=-aware
+     =expressionField= and =manipulateField= now can create or modify
+     =surfaceFields= 
+**** =funkySetFields= and function objects support tensors
+     =funkySetFields= and the function objects =expressionField= and
+     =manipulateField=  now also work with the three tensor-types
+**** Extension of the =expressionToFace= =topoSet=
+     If the expression evaluates to a =surfaceField= then this is used
+     as a flag whether or not the face is in the =faceSet=. If the
+     expression evaluates to a =volScalarField= then the old semantic
+     applies (faces are in the set if one cell is =true= and the other
+     is =false=).
+     
+     This only works for internal faces
+**** =addGlobalVariable= allows setting more than one value
+     If there is an entry =globalVariables= then this dictionary is
+     used to set the variables
+**** Function object =calculateGlobalVariables=
+     Calculates variables and then pushes them to a global namespace
+**** Generate a dummy =phi= in =replayTransientBC=
+     New option added that generates a =phi= field with value $0$ to
+     keep boundary conditions like =inletOutlet= happy
+**** Function object to dump expression results
+     The functionObject =dumpSwakExpression= dumps the complete
+     results of a swakExpression to file at each timestep. This
+     produces huge files and is therefor not endorsed
+**** Additional options for =funkySetFields=
+     Add the options =allowFunctionObjects= and =addDummyPhi= to
+     execute functionObjects and add a =phi=-field (for fields that
+     require these)
+**** Boundary condition =groovcBCDirection=
+     Based on the =directionMixed= boundary condition this allows to
+     set a boundary condition as a Dirichlet-condition only in certain
+     directions while in the other directions it is a
+     gradient-condition
+**** Boundary condition =groovyBCJump=
+     Boundary condition that imposes a jump in the value on a cyclic
+     boundary condition pair (based on =jumpCyclic=). Only works for
+     scalar values
+**** =simpleFunctionObjects= write CSV-files
+     Setting the option =outputFileMode= to =csv= writes
+     CSV-files. The option-value =foam= is the default (old style). The
+     option-value =raw= writes the values delimited by spaces (no
+     brackets for vectors and tensors)
+**** Submeshes automatically read if =searchOnDisc= specified
+     If a submesh is not yet in memory and the option =searchOnDisc=
+     is set, the mesh is automatically read into memory and kept there
+**** Conditional =functionObjects=
+     The =simpleFunctionObjects=-library now has a number of
+     functionObjects that allow the conditional execution of a list of
+     function objects.
+
+     These are
+     - executeIfExecutableFits :: if the name of the executable fits a
+          regular expression the function objects are executed
+     - executeIfObjectExists :: if a named object exists (or
+          alternatively: doesn't exist) in the registry execute the
+          function objects. Type checking also implemented
+     - executeIfEnvironmentVariable :: execute if an environment
+          variable satisfies a certain condition (exists, doesn't
+          exist, fits a regular expression)
+     - executeIfFunctionObjectPresent :: execute if a specific
+          functionObject is present. This can help prevent failures if
+          a functionObject is missing for technical reasons
+     In addition the =simpleSwakFunctionObjects=-library has
+     - executeIfSwakObject :: Evaluates a logical swak-expression. The
+          results are either accumulated using logical /or/ (if *one*
+          value is true the result will be true) or logical /and/ (all
+          values have to be true)
+     The =pythonIntegration=-library has
+     - executeIfPython :: Evaluates a Python-code-snipplet that
+          returns a value. If this value is "true" in Pythons
+          standards then the functionObjects are executed
+**** =functionObject= that reads gravitation
+     =simpleFunctionObjects= has an additional function object that
+     reads the direction of gravitation. The purpose is to assist
+     boundary conditions like =buoyantPressure= that rely on it to
+     work. Best used together with conditional function objects ("If
+     =g= is missing ....")
+**** PDE-functionObjects for =finiteArea=
+     Solve transport and laplacian equation
+**** Subclass to =DataEntry= that uses /swak/-expressions
+     This is defined in the =swak4FoamParsers=-library. The class
+     needs a default mesh defined to construct the driver. Definition
+     of the default mesh (if no other driver was constructed in some
+     function-object or by a =groovyBC=) can be forced using the
+     =initSwakFunctionObject= (see the test case =flowRateAngledDuct=)
+**** =funkySetAreaField= now also writes edgeFields
+     Similar to the =surfaceFields= in =funkySetFields=
+*** Bug fixes
+**** Compilation with Intel-Compiler possible
+     The =Utilities= failed with the Intel-compiler. Compilation now
+     falls back to good old =g++=
+**** Access to tensor-components not working
+     Because the tokens were not defined in the =flex=-files getting
+     tensor components with =tensor.xx= did not work. Fixed
+**** Constants for surfaceFields not working
+     Because surfaceFields know no =zeroGradient= the template
+     =makeConstant= did not work
+**** =snGrad= does not work for patches if the file is on disc
+     Change so that the field gets temporarily loaded to calculate the
+     gradient on the patch. Same for =internalField= and
+     =neighbourField=
+**** =potentialFoam= does not correctly use a =groovyBC=
+     The reason is that =groovyBC= usually doesn't get evaluated
+     during construction. The reason is that it is hard to tell
+     whether all required fields are already in memory. The current
+     fix is a workaround: setting =evaluateDuringConstruction= to
+     =true= forces the BC to be evaluated during construction
+**** Extra evaluation of boundary conditions causes failure
+     Extra evaluation of boundary condition that should fix the
+     problem with =calculated= patches causes =funkySetFields= to fail
+     with stock boundary conditions if not all fields are present in
+     memory 
+*** Discontinued features
+**** =groovyFlowRateInletVelocity=
+     This boundary condition will be removed in future releases
+     because the base class now supports the more general
+     =DataEntry=-class for which a =swak=-subclass exists
 ** Next release

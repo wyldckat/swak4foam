@@ -37,14 +37,14 @@ SourceFiles
 #ifndef solveTransportPDE_H
 #define solveTransportPDE_H
 
-#include "solvePDECommon.H"
+#include "solvePDECommonFiniteVolume.H"
 
 namespace Foam
 {
 
 class solveTransportPDE
 :
-    public solvePDECommon
+    public solvePDECommonFiniteVolume
 {
     //- Disallow default bitwise copy construct
     solveTransportPDE(const solveTransportPDE&);
@@ -63,8 +63,8 @@ protected:
     dimensionSet diffusionDimension_;
 
     //- the name of the phi-field. 
-    //- We'll have to use that until FieldExpressionDriver can return surface fields
-    word phiName_;
+    string phiExpression_;
+    dimensionSet phiDimension_;
 
     //- the right hand side
     string sourceExpression_;

@@ -60,15 +60,19 @@ void SampledSetValueExpressionDriver::setDebug()
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 
-//     SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(const sampledSet &surf,const SampledSetValueExpressionDriver& orig)
-// :
-//         SubsetValueExpressionDriver(orig),
-//         theSet_(surf.clone()),
-//         interpolate_(orig.interpolate_),
-//         interpolationType_(orig.interpolationType_)
-// {
-//     setDebug();
-// }
+SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(
+    const sampledSet &surf,
+    const SampledSetValueExpressionDriver& orig
+)
+:
+        SubsetValueExpressionDriver(orig),
+        //        theSet_(surf.clone()),
+        theSet_(surf),
+        interpolate_(orig.interpolate_),
+        interpolationType_(orig.interpolationType_)
+{
+    setDebug();
+}
 
 SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(
     sampledSet &surf,
@@ -195,7 +199,7 @@ scalarField *SampledSetValueExpressionDriver::makeCellVolumeField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeCellVolumeField()")
         << "faceZone knows nothing about cells"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -210,7 +214,7 @@ scalarField *SampledSetValueExpressionDriver::makeFaceAreaMagField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeFaceAreaMagField()")
         << "sampledSets knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
 
     return new scalarField(0);
 }
@@ -235,7 +239,7 @@ vectorField *SampledSetValueExpressionDriver::makeFaceAreaField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeFaceAreaField()")
         << "sampledSets knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
 
     return new vectorField(0);
 }

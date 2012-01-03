@@ -61,7 +61,14 @@ Foam::swakCodedFunctionObject::swakCodedFunctionObject
     const dictionary& dict
 )
 :
-    codedFunctionObject(name,time,dict),
+    codedFunctionObject(
+        name,
+        time,
+        dict,
+        false  // don't compile in parent class
+        // if compilation fails here then you've got an old version of 2.0.x.
+        // remove this last "false". It will compile but won't work properly
+    ),
     swakToCodedNamespaces_(
         dict.lookupOrDefault<wordList>(
             "swakToCodedNamespaces",
@@ -102,7 +109,7 @@ Foam::swakCodedFunctionObject::swakCodedFunctionObject
                 << "and 'codedToSwakNamespace' (Value: " << codedToSwakNamespace_
                 << ") both have to be set (or none)"
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
     }
     read(dict_);
 }
@@ -139,7 +146,7 @@ void Foam::swakCodedFunctionObject::injectSwakCode(const word &key,const string 
 
 bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
 {
-    //    bool success=codedFunctionObject::read(dict);
+    //  bool success=codedFunctionObject::read(dict);
     //  Info << dict.lookup("code") << dict.lookup("code") << endl;
     string codePrefix="// inserted by swak - start\n";
     forAll(swakToCodedNamespaces_,nameI) {
@@ -220,7 +227,7 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
                 << "the environment variable SWAK4FOAM_SRC points to the "
                 << "Libraries directory of the swak4Foam-sources"
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
     }
     injectSwakCode(
         "codeOptions",
@@ -289,7 +296,7 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
         );
     }
 
-    updateLibrary();
+    updateLibrary(redirectType_);
     return redirectFunctionObject().read(dict);
 }
 
