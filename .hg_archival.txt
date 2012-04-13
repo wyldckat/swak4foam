@@ -1,5 +1,6 @@
 repo: d14c0319d52c0f53e65844bba122846744687a4c
-node: 6f98076aaedbdd9ebb9351ff212a7879ff1cfea5
+node: f9c852e482cf3487ad0b7b4467ac9216e625a945
 branch: port_2.0.x
-latesttag: release2011-10-03
-latesttagdistance: 119
+latesttag: release2012-01-04
+latesttag: version_0.1.6
+latesttagdistance: 109

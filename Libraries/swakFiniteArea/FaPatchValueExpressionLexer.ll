@@ -5,6 +5,8 @@
 %}
 
 %s setname
+%s vectorcomponent
+%s tensorcomponent
 %x needsIntegerParameter
 
 %option noyywrap nounput batch debug 
@@ -47,15 +49,33 @@ float                      ((({fractional_constant}{exponent_part}?)|([[:digit:]
 \<=                   return token::TOKEN_LEQ;
 \>=                   return token::TOKEN_GEQ;
 
+<vectorcomponent>x    { BEGIN(INITIAL); return token::TOKEN_x; }
+<vectorcomponent>y    { BEGIN(INITIAL); return token::TOKEN_y; }
+<vectorcomponent>z    { BEGIN(INITIAL); return token::TOKEN_z; }
+
+<tensorcomponent>xx    { BEGIN(INITIAL); return token::TOKEN_xx; }
+<tensorcomponent>xy    { BEGIN(INITIAL); return token::TOKEN_xy; }
+<tensorcomponent>xz    { BEGIN(INITIAL); return token::TOKEN_xz; }
+<tensorcomponent>yx    { BEGIN(INITIAL); return token::TOKEN_yx; }
+<tensorcomponent>yy    { BEGIN(INITIAL); return token::TOKEN_yy; }
+<tensorcomponent>yz    { BEGIN(INITIAL); return token::TOKEN_yz; }
+<tensorcomponent>zx    { BEGIN(INITIAL); return token::TOKEN_zx; }
+<tensorcomponent>zy    { BEGIN(INITIAL); return token::TOKEN_zy; }
+<tensorcomponent>zz    { BEGIN(INITIAL); return token::TOKEN_zz; }
+<tensorcomponent>ii    { BEGIN(INITIAL); return token::TOKEN_ii; }
+
 pow                   return token::TOKEN_pow;
 exp                   return token::TOKEN_exp;
 log                   return token::TOKEN_log;
 mag                   return token::TOKEN_mag;
+magSqr                return token::TOKEN_magSqr;
 sin                   return token::TOKEN_sin;
 cos                   return token::TOKEN_cos;
 tan                   return token::TOKEN_tan;
 min                   return token::TOKEN_min;
 max                   return token::TOKEN_max;
+minPosition           return token::TOKEN_minPosition;
+maxPosition           return token::TOKEN_maxPosition;
 average               return token::TOKEN_average;
 sum                   return token::TOKEN_sum;
 sqr                   return token::TOKEN_sqr;
@@ -94,6 +114,7 @@ weights               return token::TOKEN_weights;
 lnGrad                return token::TOKEN_lnGrad;
 internalField         return token::TOKEN_internalField;
 neighbourField        return token::TOKEN_neighbourField;
+oldTime               return token::TOKEN_oldTime;
 normal                return token::TOKEN_normal;
 rand                  { BEGIN(needsIntegerParameter); return token::TOKEN_rand; }
 id                    return token::TOKEN_id;
@@ -138,8 +159,6 @@ inv                    return token::TOKEN_inv;
                        yylval->integer = atoi(yytext);
                        return token::TOKEN_INT;
                      }
-
-[xyz]                return yytext[0];
 
 <INITIAL>{id}                 {
     Foam::string *ptr=new Foam::string (yytext);
@@ -198,3 +217,14 @@ void FaPatchValueExpressionDriver::scan_end ()
 //	    fclose (yyin);
     yy_delete_buffer(bufferFaPatch);
 }
+
+void FaPatchValueExpressionDriver::startVectorComponent()
+{
+    BEGIN(vectorcomponent);
+}
+
+void FaPatchValueExpressionDriver::startTensorComponent()
+{
+    BEGIN(tensorcomponent);
+}
+

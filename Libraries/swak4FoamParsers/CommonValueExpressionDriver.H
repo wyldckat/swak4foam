@@ -85,6 +85,9 @@ class CommonValueExpressionDriver
     //- pointer to the "default" mesh
     static const fvMesh *defaultMeshPtr_;
 
+    //- getting our own pointMesh
+    autoPtr<pointMesh> pMesh_;
+
 protected:
 
     ExpressionResult result_;
@@ -129,6 +132,9 @@ protected:
 
     //- get the mesh we're living on
     virtual const fvMesh &mesh() const = 0;
+
+    //- get a point mesh (if needed)
+    inline const pointMesh & pMesh();
 
     //- get the current time
     virtual const word time() const;
@@ -175,6 +181,9 @@ private:
     //- should cellSets and faceSets be cached instead of read from disc every time
     static bool cacheSets_;
 
+    //- use the value of the previous iteration if the old time ist asked for
+    bool prevIterIsOldTime_;
+
 protected:
    
     inline bool cacheReadFields() const { return cacheReadFields_; }
@@ -185,11 +194,16 @@ protected:
 
     inline bool cacheSets() const { return cacheSets_; }
 
+    inline bool prevIterIsOldTime() const { return prevIterIsOldTime_; }
+
     string getTypeOfField(const string &name) const;
     string getTypeOfSet(const string &name) const;
 
-    template<class T>
-    inline tmp<T> readAndRegister(const word &name);
+    template<class T,class Mesh>
+    inline tmp<T> readAndRegister(
+        const word &name,
+        const Mesh &actualMesh
+    );
 
     enum SetOrigin {
         NEW,
@@ -206,7 +220,26 @@ protected:
     inline bool updateSet(autoPtr<T> &theSet,const word &,SetOrigin origin);
 
     template<class T>
-    autoPtr<T> getOrReadField(const string &name,bool failIfNoneFound=true);
+    autoPtr<T> getOrReadField(
+        const string &name,
+        bool failIfNoneFound=true,
+        bool getOldTime=false
+    );
+
+    template<class T>
+    autoPtr<T> getOrReadPointField(
+        const string &name,
+        bool failIfNoneFound=true,
+        bool getOldTime=false
+    );
+
+    template<class T,class Mesh>
+    autoPtr<T> getOrReadFieldInternal(
+        const string &name,
+        const Mesh &mesh,
+        bool failIfNoneFound=true,
+        bool getOldTime=false
+    );
 
     template<class T>
     inline void correctField(T &f) const;
@@ -398,6 +431,10 @@ public:
     scalarField *makeModuloField(const scalarField &a,const scalarField &b);
     scalarField *makeRandomField(label seed=0);
     scalarField *makeGaussRandomField(label seed=0);
+
+    vector getPositionOfMinimum(const scalarField &,const vectorField &) const;
+
+    vector getPositionOfMaximum(const scalarField &,const vectorField &) const;
 
     const Time& runTime() const;
 

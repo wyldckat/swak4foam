@@ -42,6 +42,17 @@ License
 
 namespace Foam {
  
+    inline const pointMesh &CommonValueExpressionDriver::pMesh()
+    {
+        if(!pMesh_.valid()) {
+            pMesh_.set(
+                new pointMesh(mesh())
+            );
+        }
+        
+        return pMesh_();
+    }
+
     template<class Type>
     tmp<Field<Type> > CommonValueExpressionDriver::evaluate(const string &expr,bool qPoint)
     {
@@ -414,7 +425,39 @@ namespace Foam {
     template<class T>
     autoPtr<T> CommonValueExpressionDriver::getOrReadField(
         const string &name,
-        bool failIfNoneFound
+        bool failIfNoneFound,
+        bool getOldTime
+    )
+    {
+        return this->getOrReadFieldInternal<T>(
+            name,
+            this->mesh(),
+            failIfNoneFound,
+            getOldTime
+        );
+    }
+
+    template<class T>
+    autoPtr<T> CommonValueExpressionDriver::getOrReadPointField(
+        const string &name,
+        bool failIfNoneFound,
+        bool getOldTime
+    )
+    {
+        return this->getOrReadFieldInternal<T>(
+            name,
+            this->pMesh(),
+            failIfNoneFound,
+            getOldTime
+        );
+    }
+
+    template<class T,class Mesh>
+    autoPtr<T> CommonValueExpressionDriver::getOrReadFieldInternal(
+        const string &name,
+        const Mesh &actualMesh,
+        bool failIfNoneFound,
+        bool getOldTime
     )
     {
         if(debug) {
@@ -447,7 +490,7 @@ namespace Foam {
                         IOobject::NO_READ,
                         IOobject::NO_WRITE
                     ),
-                    this->mesh(),
+                    actualMesh,
                     dimensioned<Type>(name,nullDim,pTraits<Type>::zero),
                     "zeroGradient"
                 )
@@ -505,6 +548,23 @@ namespace Foam {
                     this->mesh().lookupObject<T>(name)
                 )
             );
+            if(getOldTime) {
+                if(debug) {
+                    Info << "Getting oldTime of " << name 
+                        << " has " << this->mesh().lookupObject<T>(name).nOldTimes()
+                        << endl;
+                }
+                if(
+                    this->mesh().lookupObject<T>(name).nOldTimes()==0
+                    &&
+                    this->prevIterIsOldTime()
+                ) {
+                    if(debug) {
+                        Info << "Using the previous iteration, because there is no oldTime" << endl;
+                    }
+                    f->oldTime()=this->mesh().lookupObject<T>(name).prevIter();
+                }
+            }
         } else if(
             searchOnDisc()
             &&
@@ -515,8 +575,9 @@ namespace Foam {
             }
         
             f.set(
-                this->readAndRegister<T>(name).ptr()
+                this->readAndRegister<T>(name,actualMesh).ptr()
             );
+            // oldTime automatically read
         }
 
         if(
@@ -532,14 +593,31 @@ namespace Foam {
     
         if(f.valid()) {
             f->dimensions().reset(nullDim);
+            if(f->nOldTimes()>0) {
+                if(debug) {
+                    Info << "Removing dimensions of oldTime of " << name 
+                        << " has " << f->nOldTimes()
+                        << endl;
+                }
+                
+                // go through ALL old times
+                T *fp=f.operator->();
+                while(fp->nOldTimes()>0) {
+                    fp=&(fp->oldTime());
+                    fp->dimensions().reset(nullDim);
+                }
+            }
         }
 
         return f;
     }
 
 
-    template<class T>
-    inline tmp<T> CommonValueExpressionDriver::readAndRegister(const word &name)
+    template<class T,class Mesh>
+    inline tmp<T> CommonValueExpressionDriver::readAndRegister(
+        const word &name,
+        const Mesh &actualMesh
+    )
     {
         tmp<T>f(
             new T(
@@ -551,7 +629,7 @@ namespace Foam {
                     IOobject::MUST_READ,
                     IOobject::NO_WRITE
                 ),
-                this->mesh()
+                actualMesh
             )
         );
         if(cacheReadFields()) {
@@ -642,7 +720,7 @@ namespace Foam {
             return new Field<Type>(pField.patchInternalField());
         } else{
             FatalErrorIn("Field<Type> *CommonValueExpressionDriver::getField(const string &name)")
-                << "No field of type " << pTraits<scalar>::typeName
+                << "No field of type " << pTraits<Type>::typeName
                     << " with the name " << name << " found\n"
                     << endl
                     << exit(FatalError);
