@@ -52,20 +52,32 @@ functions
     pressureDrop
     {
         type patchExpression;
-        variables ( "pOut{patch'outlet}=sum(p*area())/sum(area());");
+        variables ( " pO ut { patch ' outlet } = sum ( p*area())/ sum(area()) ; ");
         accumulations (
             average
         );
         patches (
-            inlet 
+            inlet
         );
         expression "p-pOut";
+        verbose true;
+    }
+    pressureAverage
+    {
+        type patchAverage;
+        fields (
+            p
+        );
+        patches (
+            inlet
+            //            outlet
+        );
         verbose true;
     }
     ifUser {
         type executeIfEnvironmentVariable;
         readDuringConstruction false;
-        
+
         //        fitVariableMode exists;
         //        fitVariableMode doesNotExist;
         fitVariableMode fitsRegexp;
@@ -79,7 +91,7 @@ functions
             pressureDropCSV
             {
                 $pressureDrop;
-                
+
                 outputFileMode csv;
             }
         }
@@ -102,15 +114,15 @@ functions
                 patches (
                     outlet
                 );
-                outputFileMode csv; 
+                outputFileMode csv;
                 //             verbose true;
             }
-            velocityRaw 
+            velocityRaw
             {
                 $velocityCSV;
                 outputFileMode raw;
             }
-            velocityFoam 
+            velocityFoam
             {
                 $velocityCSV;
                 outputFileMode foam;
@@ -125,7 +137,7 @@ functions
             average
         );
         patches (
-            inlet 
+            inlet
             outlet
         );
         expression "p-pFilter";
@@ -139,11 +151,23 @@ functions
             average
         );
         patches (
-            inlet 
+            inlet
             outlet
         );
         expression "p-pTotal";
         verbose true;
+    }
+    pressureToInlet
+    {
+        $pressureToVol;
+        type swakExpression;
+        valueType faceSet;
+        setName inletPatch;
+        autoInterpolate true;
+    }
+    pressureToInletHalf {
+        $pressureToInlet;
+        setName halfInlet;
     }
     pressureToFilter
     {
@@ -153,7 +177,7 @@ functions
             average
         );
         patches (
-            inlet 
+            inlet
             outlet
         );
         expression "p-pFilter";
@@ -167,7 +191,7 @@ functions
             average
         );
         patches (
-            inlet 
+            inlet
             outlet
         );
         expression "mag(pos()-pFilter)";
@@ -338,7 +362,7 @@ functions
     {
         type swakExpression;
         valueType internalField;
-        variables "pFilter{cellZone'porosity}=sum(p*vol())/sum(vol());";        
+        variables "pFilter{cellZone'porosity}=sum(p*vol())/sum(vol());";
         expression "p-pFilter";
         accumulations (
             min
@@ -364,7 +388,7 @@ functions
         surfaceName testPlane;
         surface {
             type plane;
-            basePoint       (0 0 0);
+            basePoint       (0.0001 0.0001 0.0001);
             normalVector    (0 0 1);
             interpolate false;
         }
@@ -403,11 +427,20 @@ functions
             }
         );
         expression "maxU";
-        accumulations (            
+        accumulations (
             average
             max
             min
         );
+    }
+    testPlaneArea
+    {
+        type expressionField;
+        outputControl outputTime;
+        //        outputInterval 1;
+        fieldName testPlaneArea;
+        expression "surfaceArea(testPlane)";
+        autowrite true;
     }
     createsurfacePlane2
     {
@@ -632,8 +665,8 @@ functions
         outputInterval 1;
         fieldName distanceFromZero;
         expression "mag(pos())";
-        autowrite true;        
-    } 
+        autowrite true;
+    }
     onlyForSolver {
         type executeIfExecutableFits;
         executableNameRegexp "rho.+Foam";
@@ -648,7 +681,7 @@ functions
                 outputInterval 1;
                 fieldName myPhi;
                 expression "interpolate(rho*U)&face()";
-                autowrite true;        
+                autowrite true;
             }
             phiError
             {
@@ -669,7 +702,7 @@ functions
                 outputInterval 1;
                 fieldName myPhi2;
                 expression "myPhi";
-                autowrite true;        
+                autowrite true;
             }
             changeMyPhi2
             {
@@ -679,6 +712,17 @@ functions
                 fieldName myPhi2;
                 expression "interpolate(0)";
                 mask "fpos().x<interpolate(0)";
+            }
+            clearPorosityWall
+            {
+                type manipulatePatchField;
+                outputControl timeStep;
+                outputInterval 1;
+                fieldName myPhi;
+                patchName porosityWall;
+                expression "0";
+                mask "mag(myPhi)>1e-8";
+                writeManipulated true;
             }
         }
     }
@@ -696,7 +740,7 @@ functions
             }
         );
         expression "velClass(mag(U))";
-        autowrite true;   
+        autowrite true;
         verbose true;
     }
     turbulence {
@@ -821,7 +865,7 @@ functions
             isoField distanceFromZero;
             isoValue 0.1;
             interpolate false;
-            //            regularise      false;      
+            //            regularise      false;
         }
         verbose true;
         expression "mag(U)";
@@ -838,7 +882,7 @@ functions
         fieldName magU;
         expression "mag(U)";
         //        expression "mag(U)*sin(time())";
-        autowrite true;        
+        autowrite true;
     }
     surfaceU45
     {
@@ -879,6 +923,56 @@ functions
             min
             max
         );
+    }
+    testSurfaceU45 {
+        $testPlaneArea;
+        fieldName testU45Iso;
+        expression "surfaceArea(testIsoU45b)";
+    }
+    testSurfaceU45Relative {
+        $testPlaneArea;
+        fieldName testU45IsoRelative;
+        expression "surfaceRelativeSurface(testIsoU45b)";
+    }
+    testSurfaceU45Dist {
+        $testPlaneArea;
+        fieldName testU45IsoDist;
+        expression "surfaceDistance(testIsoU45b)";
+    }
+    testSurfaceU45Nr {
+        $testPlaneArea;
+        fieldName testU45IsoNr;
+        expression "surfaceNrOfFacesInCell(testIsoU45b)";
+    }
+    testSurfaceU45Vel {
+        $testPlaneArea;
+        fieldName testU45IsoVel;
+        expression "surfaceHasSurface(testIsoU45b) ? U : vector(0,0,0)";
+    }
+    testSurfaceU45pAverage {
+        $testPlaneArea;
+        fieldName testU45IsopAverage;
+        expression "surfaceValueAverageScalar(testIsoU45b,p)";
+    }
+    testSurfaceU45pMinimum {
+        $testPlaneArea;
+        fieldName testU45IsopMinimum;
+        expression "surfaceValueMinimumScalar(testIsoU45b,p)";
+    }
+    testSurfaceU45posAverage {
+        $testPlaneArea;
+        fieldName testU45IsoPosAverage;
+        expression "surfaceValueAverageVector(testIsoU45b,pos())";
+    }
+    testSurfaceU45posMinimum {
+        $testPlaneArea;
+        fieldName testU45IsoPosMinimum;
+        expression "surfaceValueMinimumVector(testIsoU45b,pos())";
+    }
+    testSurfaceU45posMaximum {
+        $testPlaneArea;
+        fieldName testU45IsoPosMaximum;
+        expression "surfaceValueMaximumVector(testIsoU45b,pos())";
     }
     ifPythonExpressionFO {
         type executeIfFunctionObjectPresent;
@@ -936,17 +1030,131 @@ functions
         verbose true;
         prevIterIsOldTime true;
     }
+    heatFluxField
+    {
+        type readAndUpdateFields;
+        outputControl timeStep;
+        outputInterval 1;
+        fields (
+            heatFlux
+            heatFluxPoint // just to test point fields
+            heatFluxFace // just to test face fields
+        );
+    }
+    totalHeatFlux
+    {
+        // zero because of the boundary conditions
+
+        type patchIntegrate;
+        fields (
+            heatFlux
+        );
+        patches (
+            front
+            back
+            wall
+            porosityWall
+        );
+        verbose true;
+    }
+    createMinMaxLineSet
+    {
+        type createSampledSet;
+        outputControl timeStep;
+        outputInterval 1;
+        setName fromMinToMax;
+        set {
+            type uniform;
+            axis distance;
+            start (-0.01 0 -0.025);
+            end (0.141421 0.176777 0.025);
+            nPoints 1000;
+        }
+    }
+    createMinMaxLineSet2
+    {
+        $createMinMaxLineSet;
+        setName fromMinToMax2;
+        set {
+            type midPoint;
+            axis distance;
+            start (-0.01 0 -0.025);
+            end (0.141421 0.176777 0.025);
+            nPoints 1000;
+        }
+    }
+    createMinMaxLineSet3
+    {
+        $createMinMaxLineSet;
+        setName fromMinToMax3;
+        set {
+            type midPointAndFace;
+            axis distance;
+            start (-0.01 0 -0.025);
+            end (0.141421 0.176777 0.025);
+            nPoints 1000;
+        }
+    }
+    testLineSetNr{
+        $testPlaneArea;
+        fieldName testLineNr;
+        expression "setNrOfPointsInCell(fromMinToMax)";
+    }
+    testLineSetNr2{
+        $testPlaneArea;
+        fieldName testLineNr2;
+        expression "setNrOfPointsInCell(fromMinToMax2)";
+    }
+    testLineSetNr3{
+        $testPlaneArea;
+        fieldName testLineNr3;
+        expression "setNrOfPointsInCell(fromMinToMax3)";
+    }
+    testLineSetVel{
+        $testPlaneArea;
+        fieldName testLineVel;
+        expression "setHasSet(fromMinToMax) ? U : vector(0,0,0)";
+    }
+    testLineSetDist{
+        $testPlaneArea;
+        fieldName testLineDist;
+        expression "setDistance(fromMinToMax)";
+    }
+    testLineSetAverage{
+        $testPlaneArea;
+        fieldName testLineAverage;
+        expression "setValueAverageVector(fromMinToMax,pos())";
+    }
+    testLineSetMinimum{
+        $testPlaneArea;
+        fieldName testLineMinimum;
+        expression "setValueMinimumVector(fromMinToMax,pos())";
+    }
+    testLineSetMaximum{
+        $testPlaneArea;
+        fieldName testLineMaximum;
+        expression "setValueMaximumVector(fromMinToMax,pos())";
+    }
 };
 
-libs ( 
-    "libOpenFOAM.so" 
-    "libgroovyBC.so" 
-    "libsimpleSwakFunctionObjects.so" 
-    "libswakFunctionObjects.so" 
-    "libswakTopoSources.so" 
+libs (
+    "libOpenFOAM.so"
+    "libgroovyBC.so"
+    "libsimpleSwakFunctionObjects.so"
+    "libswakFunctionObjects.so"
+    "libswakTopoSources.so"
     // Needed to decompose on 1.7
     "libcompressibleRASModels.so"
     "libpythonIntegration.so"
+    // to test plugins
+    "libswakMeshQualityFunctionPlugin.so"
+    "libswakLocalCalculationsFunctionPlugin.so"
+    "libswakRandomFunctionPlugin.so"
+    "libswakFvcSchemesFunctionPlugin.so"
+    "libswakThermoTurbFunctionPlugin.so"
+    "libswakSurfacesAndSetsFunctionPlugin.so"
+    // test plugin
+    "libswakTestFunctionPlugin.so"
 ) ;
 
 // ************************************************************************* //

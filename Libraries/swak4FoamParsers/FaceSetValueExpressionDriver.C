@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,21 +28,23 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "FaceSetValueExpressionDriver.H"
+#include "FaceSetValuePluginFunction.H"
 
 #include "addToRunTimeSelectionTable.H"
 
 #include "cellSet.H"
-#include "SortableList.H"
 
 namespace Foam {
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(FaceSetValueExpressionDriver, 0);
+
+word FaceSetValueExpressionDriver::driverName_="faceSet";
 
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceSetValueExpressionDriver, dictionary, faceSet);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceSetValueExpressionDriver, idName, faceSet);
@@ -135,7 +137,7 @@ FaceSetValueExpressionDriver::~FaceSetValueExpressionDriver()
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<>
-inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceSet::const_iterator &it) 
+inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceSet::const_iterator &it)
 {
     return it.key();
 }
@@ -226,7 +228,7 @@ scalarField *FaceSetValueExpressionDriver::makeFaceFlipField()
     );
     assert(origin!=INVALID);
 
-    SortableList<label> faceLabels(faceSet_->toc());
+    List<label> faceLabels(faceSet_->toc());
 
     forAll(faceLabels, i)
     {
@@ -279,10 +281,10 @@ scalarField *FaceSetValueExpressionDriver::makeFaceFlipField()
                 flip = true;
             }
         }
-    
+
         (*result)[i]= (flip ? -1 : 1 );
     }
- 
+
     return result;
 }
 
@@ -311,6 +313,26 @@ bool FaceSetValueExpressionDriver::update()
     }
 
     return true;
+}
+
+autoPtr<CommonPluginFunction> FaceSetValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        FaceSetValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool FaceSetValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return FaceSetValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

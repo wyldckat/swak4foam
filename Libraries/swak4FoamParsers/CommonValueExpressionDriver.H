@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -37,7 +37,7 @@ SourceFiles
     CommonValueExpressionDriverI.H
     CommonValueExpressionDriver.C
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef CommonValueExpressionDriver_H
@@ -52,6 +52,7 @@ SourceFiles
 
 #include "ExpressionResult.H"
 #include "StoredExpressionResult.H"
+#include "DelayedExpressionResult.H"
 
 namespace Foam
 {
@@ -63,6 +64,8 @@ namespace Foam
 class ExpressionDriverWriter;
 
 class initSwakFunctionObject;
+
+class CommonPluginFunction;
 
 class CommonValueExpressionDriver
 {
@@ -76,9 +79,9 @@ class CommonValueExpressionDriver
     //- variables from a dictionary
     stringList variableStrings_;
 
-    //- this one is in charge for writing and restoring 
+    //- this one is in charge for writing and restoring
 
-    //- by using it this class doesn't have to inherit from regIOobject 
+    //- by using it this class doesn't have to inherit from regIOobject
     //- (which would be an overkill and inconvenient)
     autoPtr<ExpressionDriverWriter> writer_;
 
@@ -88,24 +91,39 @@ class CommonValueExpressionDriver
     //- getting our own pointMesh
     autoPtr<pointMesh> pMesh_;
 
-protected:
+    //- the position to which the parser progressed
+    label parserLastPos_;
 
+    //- string that allows more detailed allocation of the context
+    string contextString_;
+
+protected:
+    //- get the string of the context in a form that is usable for an error message
+    std::string getContextString();
+
+    const string contextString() const { return contextString_; }
+
+    //- little helper method to print hex adresses
+    word getHex(const void *) const;
+
+    //- access last position
+    const label &parserLastPos() const { return parserLastPos_; }
+
+    //- access last position
+    label &parserLastPos() { return parserLastPos_; }
+
+private:
     ExpressionResult result_;
 
     HashTable<ExpressionResult,word> variables_;
 
     List<StoredExpressionResult> storedVariables_;
 
-    label storedVariablesIndex_;
+    HashTable<DelayedExpressionResult,word> delayedVariables_;
+
+    label specialVariablesIndex_;
 
     wordList globalVariableScopes_;
-
-    const ExpressionResult &lookupGlobal(const word &name) const;
-
-    template<class T>
-    bool isGlobal(const word &name,bool isPoint) const;
-
-    void setGlobalScopes(const wordList &);
 
     HashTable<interpolationTable<scalar>,word> lines_;
 
@@ -117,12 +135,28 @@ protected:
 
     bool trace_parsing_;
 
-    // Handling the scanner 
+protected:
+    const ExpressionResult &lookupGlobal(const word &name) const;
+
+    template<class T>
+    bool isGlobal(const word &name,bool isPoint) const;
+
+    void setGlobalScopes(const wordList &);
+
+    ExpressionResult &result() { return result_; }
+
+    //- scanner state for reentrant lexer
+    void *scanner_;
+
+    // Handling the scanner
     virtual void scan_begin()=0;
     virtual void scan_end()=0;
 
     //- update stuff that needs updating
     virtual bool update();
+
+public:
+    const string &content() const { return content_; }
 
     //- actual size of the field
     virtual label size() const = 0;
@@ -130,6 +164,7 @@ protected:
     //- actual size of the supporting point-field
     virtual label pointSize() const = 0;
 
+protected:
     //- get the mesh we're living on
     virtual const fvMesh &mesh() const = 0;
 
@@ -142,7 +177,7 @@ protected:
     //- set the default Mesh (if it is unset)
     static bool setUnsetDefaultMesh(const fvMesh &);
 
-    //- set the default Mesh 
+    //- set the default Mesh
     static bool resetDefaultMesh(const fvMesh &);
 
     //- get the default Mesh (if one is defined)
@@ -157,7 +192,7 @@ protected:
     );
 
     //- look through the current variable values and update the stored variables
-    void updateStoredVariables(bool force=false);
+    void updateSpecialVariables(bool force=false);
 
     //- read data from the writer
     virtual void getData(const dictionary &);
@@ -185,7 +220,7 @@ private:
     bool prevIterIsOldTime_;
 
 protected:
-   
+
     inline bool cacheReadFields() const { return cacheReadFields_; }
 
     inline bool searchInMemory() const { return searchInMemory_; }
@@ -243,6 +278,26 @@ protected:
 
     template<class T>
     inline void correctField(T &f) const;
+
+    typedef HashTable<int> StartupSymbols;
+
+    template<class T>
+    class SymbolTable
+    :
+    public StartupSymbols
+    {
+    public:
+        SymbolTable();
+    };
+
+    virtual int startupSymbol(const word &name) = 0;
+
+    virtual void parseInternal(int startSymbol) = 0;
+
+    //- only subclasses have write-access
+    //    inline  HashTable<ExpressionResult,word> &variables();
+    ExpressionResult &variable(const word &name);
+
 public:
     //- Runtime type information
     TypeName("CommonValueExpressionDriver");
@@ -281,7 +336,7 @@ public:
         bool searchInMemory=true,
         bool searchOnDisc=false
     );
-    
+
     //- Copy construct
     CommonValueExpressionDriver(
         const CommonValueExpressionDriver&
@@ -320,7 +375,10 @@ public:
 
     // Member Functions
 
-    inline const HashTable<ExpressionResult,word> &variables() const;
+    //    inline const HashTable<ExpressionResult,word> &variables() const;
+    const ExpressionResult &variable(const word &name) const;
+
+    bool hasVariable(const word &name) const;
 
     void setSearchBehaviour(
         bool cacheReadFields,
@@ -336,11 +394,15 @@ public:
 
     void evaluateVariable(const word &name,const string &expr);
 
-    void evaluateVariableRemote(const string &remoteExpr,const word &name,const string &expr);
+    void evaluateVariableRemote(
+        const string &remoteExpr,
+        const word &name,
+        const string &expr
+    );
 
     //- read the list of variable strings (or initialize with a single string)
     static stringList readVariableStrings(const dictionary &dict);
- 
+
     //- read the list of variable strings (or initialize with a single string)
     void setVariableStrings(const dictionary &dict);
 
@@ -362,7 +424,7 @@ public:
 
     string outputEntry();
 
-    word getResultType();
+    virtual word getResultType();
 
     ExpressionResult getUniform(label size,bool noWarning);
 
@@ -378,7 +440,7 @@ public:
     Field<bool> *doLogicalOp(Field<bool> *a,Op op,Field<bool> *b);
 
     inline Field<bool> *doLogicalNot(Field<bool> *a);
-    
+
     template<class Type>
     Field<Type> *doConditional(Field<bool> *d,Field<Type> *yes,Field<Type> *no);
 
@@ -411,16 +473,23 @@ public:
     scalar getLineValue(const string &name,scalar t);
 
     //- read some interpolation tables
-    void readTables(Istream &is,HashTable<interpolationTable<scalar> > &,bool clear=true);
+    void readTables(
+        Istream &is,
+        HashTable<interpolationTable<scalar> > &,
+        bool clear=true
+    );
 
     //- read all the interpolation tables known to man
     void readTables(const dictionary &);
 
     //- read variables and tables (for objects that were not constructed by a dictionary)
-    void readVariablesAndTables(const dictionary &);
+    virtual void readVariablesAndTables(const dictionary &);
 
     //- write some interpolation tables
-    void writeTables(Ostream &os,const HashTable<interpolationTable<scalar> > &) const;
+    void writeTables(
+        Ostream &os,
+        const HashTable<interpolationTable<scalar> > &
+    ) const;
 
     //- is this a lookup table
     inline bool isLookup(const string &name) const;
@@ -444,8 +513,10 @@ public:
                                     scalarField *,scalarField *,scalarField *,
                                     scalarField *,scalarField *,scalarField *);
 
-    symmTensorField *composeSymmTensorField(scalarField *,scalarField *,scalarField *,
-                                            scalarField *,scalarField *,scalarField *);
+    symmTensorField *composeSymmTensorField(
+        scalarField *,scalarField *,scalarField *,
+        scalarField *,scalarField *,scalarField *
+    );
 
     sphericalTensorField *composeSphericalTensorField(scalarField *);
 
@@ -455,8 +526,8 @@ public:
     void error (const Location& l, const std::string& m);
     void error (const std::string& m);
 
-    // Handling the parser
-    virtual void parse(const std::string& f)=0;
+    //- Handling the parser
+    label parse(const std::string& f,const word &start="");
 
     // Handling temporary variables
     void clearVariables();
@@ -467,6 +538,10 @@ public:
         bool parsing
     );
 
+    bool traceScanning() const { return trace_scanning_; }
+
+    bool traceParsing() const { return trace_parsing_; }
+
     //- create a writer for this object
     void createWriterAndRead(const word &name);
 
@@ -474,9 +549,24 @@ public:
     //- Should enable exact restarts
     void tryWrite() const;
 
+    //- return a new plugin-function
+    virtual autoPtr<CommonPluginFunction> newPluginFunction(
+        const word &name
+    ) = 0;
+
+    //- tests for a plugin-function
+    virtual bool existsPluginFunction(
+        const word &name
+    ) = 0;
+
+    //- append a string to the conext for error messages
+    void appendToContext(const string &value);
+
     friend class ExpressionDriverWriter;
 
     friend class initSwakFunctionObject;
+
+    friend class CommonPluginFunction;
 };
 
 
