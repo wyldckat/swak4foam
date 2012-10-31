@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,10 +28,12 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "SampledSetValueExpressionDriver.H"
+#include "SampledSetValuePluginFunction.H"
+
 #include "SetsRepository.H"
 
 #include "addToRunTimeSelectionTable.H"
@@ -42,13 +44,15 @@ namespace Foam {
 
 defineTypeNameAndDebug(SampledSetValueExpressionDriver, 0);
 
+word SampledSetValueExpressionDriver::driverName_="set";
+
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, SampledSetValueExpressionDriver, dictionary, set);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, SampledSetValueExpressionDriver, idName, set);
 
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void SampledSetValueExpressionDriver::setDebug() 
+void SampledSetValueExpressionDriver::setDebug()
 {
     if(debug>1) {
         if(sampledSet::debug<1) {
@@ -60,15 +64,19 @@ void SampledSetValueExpressionDriver::setDebug()
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 
-//     SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(const sampledSet &surf,const SampledSetValueExpressionDriver& orig)
-// :
-//         SubsetValueExpressionDriver(orig),
-//         theSet_(surf.clone()),
-//         interpolate_(orig.interpolate_),
-//         interpolationType_(orig.interpolationType_)
-// {
-//     setDebug();
-// }
+SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(
+    const sampledSet &surf,
+    const SampledSetValueExpressionDriver& orig
+)
+:
+        SubsetValueExpressionDriver(orig),
+        //        theSet_(surf.clone()),
+        theSet_(surf),
+        interpolate_(orig.interpolate_),
+        interpolationType_(orig.interpolationType_)
+{
+    setDebug();
+}
 
 SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(
     sampledSet &surf,
@@ -113,7 +121,7 @@ SampledSetValueExpressionDriver::SampledSetValueExpressionDriver(const dictionar
     ),
     interpolate_(dict.lookupOrDefault<bool>("interpolate",false)),
     interpolationType_(
-        interpolate_ 
+        interpolate_
         ?
         word(dict.lookup("interpolationType"))
         :
@@ -145,49 +153,54 @@ bool SampledSetValueExpressionDriver::update()
     return updated;
 }
 
-Field<scalar> *SampledSetValueExpressionDriver::getScalarField(const string &name)
+Field<scalar> *SampledSetValueExpressionDriver::getScalarField(const string &name,bool oldTime)
 {
     return sampleOrInterpolateInternal<scalar,volScalarField,surfaceScalarField>
         (
-            name
+            name,
+            oldTime
         );
 }
 
-Field<vector> *SampledSetValueExpressionDriver::getVectorField(const string &name)
+Field<vector> *SampledSetValueExpressionDriver::getVectorField(const string &name,bool oldTime)
 {
     return sampleOrInterpolateInternal<vector,volVectorField,surfaceVectorField>
         (
-            name
+            name,
+            oldTime
         );
 }
 
-Field<tensor> *SampledSetValueExpressionDriver::getTensorField(const string &name)
+Field<tensor> *SampledSetValueExpressionDriver::getTensorField(const string &name,bool oldTime)
 {
     return sampleOrInterpolateInternal<tensor,volTensorField,surfaceTensorField>
         (
-            name
+            name,
+            oldTime
         );
 }
 
-Field<symmTensor> *SampledSetValueExpressionDriver::getSymmTensorField(const string &name)
+Field<symmTensor> *SampledSetValueExpressionDriver::getSymmTensorField(const string &name,bool oldTime)
 {
     return sampleOrInterpolateInternal<symmTensor,volSymmTensorField,surfaceSymmTensorField>
         (
-            name
+            name,
+            oldTime
         );
 }
 
-Field<sphericalTensor> *SampledSetValueExpressionDriver::getSphericalTensorField(const string &name)
+    Field<sphericalTensor> *SampledSetValueExpressionDriver::getSphericalTensorField(const string &name,bool oldTime)
 {
     return sampleOrInterpolateInternal<sphericalTensor,volSphericalTensorField,surfaceSphericalTensorField>
         (
-            name
+            name,
+            oldTime
         );
 }
 
 vectorField *SampledSetValueExpressionDriver::makePositionField()
 {
-    return new vectorField(theSet_); 
+    return new vectorField(theSet_);
 }
 
 scalarField *SampledSetValueExpressionDriver::makeCellVolumeField()
@@ -195,7 +208,7 @@ scalarField *SampledSetValueExpressionDriver::makeCellVolumeField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeCellVolumeField()")
         << "faceZone knows nothing about cells"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -210,7 +223,7 @@ scalarField *SampledSetValueExpressionDriver::makeFaceAreaMagField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeFaceAreaMagField()")
         << "sampledSets knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
 
     return new scalarField(0);
 }
@@ -235,9 +248,29 @@ vectorField *SampledSetValueExpressionDriver::makeFaceAreaField()
     FatalErrorIn("SampledSetValueExpressionDriver::makeFaceAreaField()")
         << "sampledSets knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
 
     return new vectorField(0);
+}
+
+autoPtr<CommonPluginFunction> SampledSetValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        SampledSetValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool SampledSetValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return SampledSetValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

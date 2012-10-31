@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,10 +28,11 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "CellZoneValueExpressionDriver.H"
+#include "CellZoneValuePluginFunction.H"
 
 #include "addToRunTimeSelectionTable.H"
 
@@ -40,6 +41,8 @@ namespace Foam {
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(CellZoneValueExpressionDriver, 0);
+
+word CellZoneValueExpressionDriver::driverName_="cellZone";
 
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, CellZoneValueExpressionDriver, dictionary, cellZone);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, CellZoneValueExpressionDriver, idName, cellZone);
@@ -58,7 +61,7 @@ label getCellZoneID(const fvMesh &mesh,const word &name)
             << "The cellZone " << name << " was not found in "
                 << mesh.cellZones().names()
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
 
     }
     return result;
@@ -81,12 +84,20 @@ CellZoneValueExpressionDriver::CellZoneValueExpressionDriver(const dictionary& d
  :
     SubsetValueExpressionDriver(dict),
     cellZone_(
-        regionMesh(dict,mesh).cellZones()[
+        regionMesh(
+            dict,
+            mesh,
+            searchOnDisc()
+        ).cellZones()[
             getCellZoneID(
-                regionMesh(dict,mesh),
+                regionMesh(
+                    dict,
+                    mesh,
+                    searchOnDisc()
+                ),
                 dict.lookup(
                     "zoneName"
-                )                
+                )
             )
         ]
     )
@@ -116,34 +127,34 @@ CellZoneValueExpressionDriver::~CellZoneValueExpressionDriver()
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 template<>
-inline label SubsetValueExpressionDriver::getIndexFromIterator(const cellZone::const_iterator &it) 
+inline label SubsetValueExpressionDriver::getIndexFromIterator(const cellZone::const_iterator &it)
 {
     return *it;
 }
 
-Field<scalar> *CellZoneValueExpressionDriver::getScalarField(const string &name)
+Field<scalar> *CellZoneValueExpressionDriver::getScalarField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volScalarField,cellZone,scalar>(name,cellZone_);
+    return getFieldInternal<volScalarField,cellZone,scalar>(name,cellZone_,oldTime);
 }
 
-Field<vector> *CellZoneValueExpressionDriver::getVectorField(const string &name)
+Field<vector> *CellZoneValueExpressionDriver::getVectorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volVectorField,cellZone,vector>(name,cellZone_);
+    return getFieldInternal<volVectorField,cellZone,vector>(name,cellZone_,oldTime);
 }
 
-Field<tensor> *CellZoneValueExpressionDriver::getTensorField(const string &name)
+Field<tensor> *CellZoneValueExpressionDriver::getTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volTensorField,cellZone,tensor>(name,cellZone_);
+    return getFieldInternal<volTensorField,cellZone,tensor>(name,cellZone_,oldTime);
 }
 
-Field<symmTensor> *CellZoneValueExpressionDriver::getSymmTensorField(const string &name)
+Field<symmTensor> *CellZoneValueExpressionDriver::getSymmTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volSymmTensorField,cellZone,symmTensor>(name,cellZone_);
+    return getFieldInternal<volSymmTensorField,cellZone,symmTensor>(name,cellZone_,oldTime);
 }
 
-Field<sphericalTensor> *CellZoneValueExpressionDriver::getSphericalTensorField(const string &name)
+Field<sphericalTensor> *CellZoneValueExpressionDriver::getSphericalTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volSphericalTensorField,cellZone,sphericalTensor>(name,cellZone_);
+    return getFieldInternal<volSphericalTensorField,cellZone,sphericalTensor>(name,cellZone_,oldTime);
 }
 
 vectorField *CellZoneValueExpressionDriver::makePositionField()
@@ -167,7 +178,7 @@ scalarField *CellZoneValueExpressionDriver::makeFaceAreaMagField()
     FatalErrorIn("CellZoneValueExpressionDriver::makeFaceAreaField()")
         << "cellZone knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -176,7 +187,7 @@ vectorField *CellZoneValueExpressionDriver::makeFaceNormalField()
     FatalErrorIn("CellZoneValueExpressionDriver::makeFaceNormalField()")
         << "cellZone knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new vectorField(0);
 }
 
@@ -185,7 +196,7 @@ scalarField *CellZoneValueExpressionDriver::makeFaceFlipField()
     FatalErrorIn("CellZoneValueExpressionDriver::makeFaceFlipField()")
         << "cellZone knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -194,8 +205,28 @@ vectorField *CellZoneValueExpressionDriver::makeFaceAreaField()
     FatalErrorIn("CellZoneValueExpressionDriver::makeFaceAreaField()")
         << "cellZone knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new vectorField(0);
+}
+
+autoPtr<CommonPluginFunction> CellZoneValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        CellZoneValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool CellZoneValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return CellZoneValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

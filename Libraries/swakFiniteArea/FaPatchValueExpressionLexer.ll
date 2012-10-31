@@ -1,15 +1,22 @@
- 
 %{                                          /* -*- C++ -*- */
 #include "FaPatchValueExpressionDriverYY.H"
 #include <errno.h>
+#include "FaPatchValuePluginFunction.H"
+#include "FaPatchValueExpressionParser.tab.hh"
+typedef parserFaPatch::FaPatchValueExpressionParser::semantic_type YYSTYPE;
 %}
 
 %s setname
+%s vectorcomponent
+%s tensorcomponent
+%x parsedByOtherParser
 %x needsIntegerParameter
 
-%option noyywrap nounput batch debug 
+%option noyywrap nounput batch debug
 %option stack
 %option prefix="parserFaPatch"
+%option reentrant
+%option bison-bridge
 
 id      [[:alpha:]_][[:alnum:]_]*
 setid   [[:alpha:]_][[:alnum:]_-]*
@@ -25,7 +32,20 @@ float                      ((({fractional_constant}{exponent_part}?)|([[:digit:]
 %%
 
 %{
+    typedef parserFaPatch::FaPatchValueExpressionParser::token token;
+
     yylloc->step ();
+
+    if (start_token)
+    {
+        if(driver.traceScanning()) {
+            Foam::Info << "Start token: " << start_token << Foam::endl;
+        }
+
+        int t = start_token;
+        start_token = 0;
+        return t;
+    }
 %}
 
 <INITIAL,setname,needsIntegerParameter>[ \t]+             yylloc->step ();
@@ -36,10 +56,6 @@ float                      ((({fractional_constant}{exponent_part}?)|([[:digit:]
 <needsIntegerParameter>[(] return yytext[0];
 <needsIntegerParameter>[)] { BEGIN(INITIAL); return yytext[0]; }
 
-%{
-    typedef parserFaPatch::FaPatchValueExpressionParser::token token;
-%}
-
 &&                   return token::TOKEN_AND;
 \|\|                 return token::TOKEN_OR;
 ==                   return token::TOKEN_EQ;
@@ -47,15 +63,34 @@ float                      ((({fractional_constant}{exponent_part}?)|([[:digit:]
 \<=                   return token::TOKEN_LEQ;
 \>=                   return token::TOKEN_GEQ;
 
+<vectorcomponent>x    { BEGIN(INITIAL); return token::TOKEN_x; }
+<vectorcomponent>y    { BEGIN(INITIAL); return token::TOKEN_y; }
+<vectorcomponent>z    { BEGIN(INITIAL); return token::TOKEN_z; }
+
+<tensorcomponent>xx    { BEGIN(INITIAL); return token::TOKEN_xx; }
+<tensorcomponent>xy    { BEGIN(INITIAL); return token::TOKEN_xy; }
+<tensorcomponent>xz    { BEGIN(INITIAL); return token::TOKEN_xz; }
+<tensorcomponent>yx    { BEGIN(INITIAL); return token::TOKEN_yx; }
+<tensorcomponent>yy    { BEGIN(INITIAL); return token::TOKEN_yy; }
+<tensorcomponent>yz    { BEGIN(INITIAL); return token::TOKEN_yz; }
+<tensorcomponent>zx    { BEGIN(INITIAL); return token::TOKEN_zx; }
+<tensorcomponent>zy    { BEGIN(INITIAL); return token::TOKEN_zy; }
+<tensorcomponent>zz    { BEGIN(INITIAL); return token::TOKEN_zz; }
+<tensorcomponent>ii    { BEGIN(INITIAL); return token::TOKEN_ii; }
+<tensorcomponent>T     { BEGIN(INITIAL); return token::TOKEN_transpose; }
+
 pow                   return token::TOKEN_pow;
 exp                   return token::TOKEN_exp;
 log                   return token::TOKEN_log;
 mag                   return token::TOKEN_mag;
+magSqr                return token::TOKEN_magSqr;
 sin                   return token::TOKEN_sin;
 cos                   return token::TOKEN_cos;
 tan                   return token::TOKEN_tan;
 min                   return token::TOKEN_min;
 max                   return token::TOKEN_max;
+minPosition           return token::TOKEN_minPosition;
+maxPosition           return token::TOKEN_maxPosition;
 average               return token::TOKEN_average;
 sum                   return token::TOKEN_sum;
 sqr                   return token::TOKEN_sqr;
@@ -94,6 +129,7 @@ weights               return token::TOKEN_weights;
 lnGrad                return token::TOKEN_lnGrad;
 internalField         return token::TOKEN_internalField;
 neighbourField        return token::TOKEN_neighbourField;
+oldTime               return token::TOKEN_oldTime;
 normal                return token::TOKEN_normal;
 rand                  { BEGIN(needsIntegerParameter); return token::TOKEN_rand; }
 id                    return token::TOKEN_id;
@@ -116,7 +152,6 @@ false                  return token::TOKEN_FALSE;
 toPoint                 return token::TOKEN_toPoint;
 toFace                  return token::TOKEN_toFace;
 
-transpose              return token::TOKEN_transpose;
 diag                   return token::TOKEN_diag;
 tr                     return token::TOKEN_tr;
 dev                    return token::TOKEN_dev;
@@ -138,8 +173,6 @@ inv                    return token::TOKEN_inv;
                        yylval->integer = atoi(yytext);
                        return token::TOKEN_INT;
                      }
-
-[xyz]                return yytext[0];
 
 <INITIAL>{id}                 {
     Foam::string *ptr=new Foam::string (yytext);
@@ -171,30 +204,161 @@ inv                    return token::TOKEN_inv;
         yylval->name = ptr; return token::TOKEN_PHID;
         //    } else if(driver.is<Foam::bool>(*ptr,true)) {
         //        yylval->name = ptr; return token::TOKEN_PLID;
+    } else if(Foam::FaPatchValuePluginFunction::exists(driver,*ptr)) {
+        // OK. We'll create the function two times. But this is less messy
+        // than passing it two times
+        Foam::autoPtr<Foam::FaPatchValuePluginFunction> fInfo(
+            Foam::FaPatchValuePluginFunction::New(
+                driver,
+                *ptr
+            )
+        );
+
+        int tokenTyp=-1;
+        if(fInfo->returnType()=="scalar") {
+             tokenTyp=token::TOKEN_FUNCTION_SID;
+        } else if(fInfo->returnType()=="vector") {
+             tokenTyp=token::TOKEN_FUNCTION_VID;
+        } else if(fInfo->returnType()=="tensor") {
+             tokenTyp=token::TOKEN_FUNCTION_TID;
+        } else if(fInfo->returnType()=="symmTensor") {
+             tokenTyp=token::TOKEN_FUNCTION_YID;
+        } else if(fInfo->returnType()=="sphericalTensor") {
+             tokenTyp=token::TOKEN_FUNCTION_HID;
+        } else if(fInfo->returnType()=="pointScalar") {
+             tokenTyp=token::TOKEN_FUNCTION_PSID;
+        } else if(fInfo->returnType()=="pointVector") {
+             tokenTyp=token::TOKEN_FUNCTION_PVID;
+        } else if(fInfo->returnType()=="pointTensor") {
+             tokenTyp=token::TOKEN_FUNCTION_PTID;
+        } else if(fInfo->returnType()=="pointSymmTensor") {
+             tokenTyp=token::TOKEN_FUNCTION_PYID;
+        } else if(fInfo->returnType()=="pointSphericalTensor") {
+             tokenTyp=token::TOKEN_FUNCTION_PHID;
+        } else {
+            driver.error (
+                *yylloc,
+                "Function "+*ptr+" returns unsupported type "
+                + fInfo->returnType()
+            );
+        }
+
+        yylval->name = ptr;
+        return tokenTyp;
     } else {
+        if((*ptr)=="I") {
+            delete ptr;
+            return token::TOKEN_unitTensor;
+        }
         driver.error (*yylloc, "field "+*ptr+" not existing or of wrong type");
     }
                      }
+
+<parsedByOtherParser>. {
+    numberOfFunctionChars--;
+    if(driver.traceScanning()) {
+        Foam::Info << " Remaining characters to be eaten: "
+            << numberOfFunctionChars
+            << Foam::endl;
+    }
+    if(numberOfFunctionChars>0) {
+        return token::TOKEN_IN_FUNCTION_CHAR;
+    } else {
+        BEGIN(INITIAL);
+        return token::TOKEN_LAST_FUNCTION_CHAR;
+    }
+                       }
 
 .                    driver.error (*yylloc, "invalid character");
 <needsIntegerParameter>.                    driver.error (*yylloc, "invalid character when only an integer is expected");
 
 %%
 
-YY_BUFFER_STATE bufferFaPatch;
+// YY_BUFFER_STATE bufferFaPatch;
 
 void FaPatchValueExpressionDriver::scan_begin ()
 {
-    yy_flex_debug = trace_scanning_;
-    bufferFaPatch=yy_scan_string(content_.c_str());
-    
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::scan_begin "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
 
-//    if (!(yyin = fopen (file.c_str (), "r")))
-//        error (std::string ("cannot open ") + file);
+    if(scanner_!=NULL) {
+        FatalErrorIn("FaPatchValueExpressionDriver::scan_begin")
+            << "Already existing scanner " << getHex(scanner_)
+                << endl
+                << exit(FatalError);
+
+    }
+
+    yylex_init(&scanner_);
+    struct yyguts_t * yyg = (struct yyguts_t*)scanner_;
+     yy_flex_debug = traceScanning();
+    /* bufferPatch= */ yy_scan_string(content().c_str(),scanner_);
+
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::scan_begin - finished "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
 }
 
 void FaPatchValueExpressionDriver::scan_end ()
 {
-//	    fclose (yyin);
-    yy_delete_buffer(bufferFaPatch);
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::scan_end "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
+
+    if(scanner_==NULL) {
+        FatalErrorIn("FaPatchValueExpressionDriver::scan_end")
+            << "Uninitialized Scanner. Can't delete it"
+                << endl
+                << exit(FatalError);
+
+    }
+
+    yylex_destroy(scanner_);
+
+    scanner_=NULL;
+ //         fclose (yyin);
+    //    yy_delete_buffer(bufferPatch,scanner_);
+}
+
+void FaPatchValueExpressionDriver::startEatCharacters()
+{
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::startEatCharacters() "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
+
+    struct yyguts_t * yyg = (struct yyguts_t*)scanner_;
+    BEGIN(parsedByOtherParser);
+}
+
+void FaPatchValueExpressionDriver::startVectorComponent()
+{
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::startVectorComponent() "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
+
+    struct yyguts_t * yyg = (struct yyguts_t*)scanner_;
+    BEGIN(vectorcomponent);
+}
+
+void FaPatchValueExpressionDriver::startTensorComponent()
+{
+    if(traceScanning()) {
+        Info << "FaPatchValueExpressionDriver::startTensorComponent() "
+            << getHex(this) << endl;
+        Info << "Scanner: " << getHex(scanner_) << endl;
+    }
+
+    struct yyguts_t * yyg = (struct yyguts_t*)scanner_;
+    BEGIN(tensorcomponent);
 }

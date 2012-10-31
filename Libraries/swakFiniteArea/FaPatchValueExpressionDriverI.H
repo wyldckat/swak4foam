@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,7 +28,7 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -41,7 +41,7 @@ License
 #include <cassert>
 
 namespace Foam {
- 
+
     template<class Type>
     Field<Type> *FaPatchValueExpressionDriver::getField(const string &name)
     {
@@ -51,9 +51,9 @@ namespace Foam {
 
         {
             Field<Type> *vals=NULL;
-            
-            if(variables_.found(name)) {
-                vals=variables_[name].getResult<Type>(true).ptr();
+
+            if(hasVariable(name)) {
+                vals=variable(name).getResult<Type>(true).ptr();
             } else if(isGlobal<Type>(name,false)) {
                 vals=const_cast<ExpressionResult &>(
                     lookupGlobal(name)
@@ -71,7 +71,7 @@ namespace Foam {
                 }
             }
         }
-    
+
         autoPtr<localAreaField> tmpVol;
         autoPtr<localEdgeField> tmpSurf;
         autoPtr<localPointField> tmpPoint;
@@ -90,7 +90,7 @@ namespace Foam {
                 tmpVol.set(this->readAndRegister<localAreaField>(name).ptr());
             } else if(fType==localEdgeField::typeName) {
                 tmpSurf.set(this->readAndRegister<localEdgeField>(name).ptr());
-            } 
+            }
             // TODO: this constructor doesn't work
             // else if(fType==localPointField::typeName) {
             //     tmpPoint.set(this->readAndRegister<localPointField>(name).ptr());
@@ -123,7 +123,76 @@ namespace Foam {
                 << "No field of type " << pTraits<scalar>::typeName
                     << " with the name " << name << " found\n"
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
+
+            return NULL;
+        }
+    }
+
+    template<class Type>
+    Field<Type> *FaPatchValueExpressionDriver::getOldTimeField(const string &name)
+    {
+        typedef GeometricField<Type,faPatchField,areaMesh> localAreaField;
+        typedef GeometricField<Type,faePatchField,edgeMesh> localEdgeField;
+        typedef GeometricField<Type,pointPatchField,pointMesh> localPointField;
+
+        autoPtr<localAreaField> tmpVol;
+        autoPtr<localEdgeField> tmpSurf;
+        autoPtr<localPointField> tmpPoint;
+
+        if(
+            searchOnDisc()
+            &&
+            !mesh().foundObject<localAreaField>(name)
+            &&
+            !mesh().foundObject<localEdgeField>(name)
+            &&
+            !mesh().foundObject<localPointField>(name)
+        ) {
+            word fType=this->getTypeOfField(name);
+            if(fType==localAreaField::typeName) {
+                tmpVol.set(this->readAndRegister<localAreaField>(name).ptr());
+            } else if(fType==localEdgeField::typeName) {
+                tmpSurf.set(this->readAndRegister<localEdgeField>(name).ptr());
+            }
+            // TODO: this constructor doesn't work
+            // else if(fType==localPointField::typeName) {
+            //     tmpPoint.set(this->readAndRegister<localPointField>(name).ptr());
+            // }
+        }
+
+        label patchI=this->patch_.index();
+
+        if(
+            patch_.boundaryMesh().mesh().thisDb().
+            objectRegistry::foundObject<localAreaField>(name)
+        ) {
+            const typename localAreaField::PatchFieldType &pField=
+                mesh().lookupObject<localAreaField>(name).
+                oldTime().boundaryField()[patchI];
+            return new Field<Type>(pField);
+        } else if(
+            patch_.boundaryMesh().mesh().thisDb().
+            objectRegistry::foundObject<localEdgeField>(name)
+        ) {
+            const typename localEdgeField::PatchFieldType &pField=
+                mesh().lookupObject<localEdgeField>(name).
+                oldTime().boundaryField()[patchI];
+            return new Field<Type>(pField);
+        } else if(
+            patch_.boundaryMesh().mesh().thisDb().
+            objectRegistry::foundObject<localPointField>(name)
+        ) {
+            const typename localPointField::PatchFieldType &pField=
+                mesh().lookupObject<localPointField>(name).
+                oldTime().boundaryField()[patchI];
+            return new Field<Type>(pField.patchInternalField());
+        } else{
+            FatalErrorIn("Field<Type> *FaPatchValueExpressionDriver::getField(const string &name)")
+                << "No field of type " << pTraits<scalar>::typeName
+                    << " with the name " << name << " found\n"
+                    << endl
+                    << exit(FatalError);
 
             return NULL;
         }
@@ -135,8 +204,8 @@ namespace Foam {
         typedef GeometricField<Type,faPatchField,areaMesh> localAreaField;
         typedef GeometricField<Type,pointPatchField,pointMesh> localPointField;
 
-        if(variables_.found(name)) {
-            return variables_[name].getResult<Type>(true).ptr();
+        if(hasVariable(name)) {
+            return variable(name).getResult<Type>(true).ptr();
         }
 
         if(
@@ -158,7 +227,7 @@ namespace Foam {
                 << "No field of type " << pTraits<scalar>::typeName
                     << " with the name " << name << " found or unsupported type for patchInternalField\n"
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
 
             return NULL;
         }
@@ -169,8 +238,8 @@ namespace Foam {
     {
         typedef GeometricField<Type,faPatchField,areaMesh> localAreaField;
 
-        if(variables_.found(name)) {
-            return variables_[name].getResult<Type>(true).ptr();
+        if(hasVariable(name)) {
+            return variable(name).getResult<Type>(true).ptr();
         }
 
         if(
@@ -185,7 +254,7 @@ namespace Foam {
                 << "No field of type " << pTraits<scalar>::typeName
                     << " with the name " << name << " found or unsupported type for patchNeighbourField\n"
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
 
             return NULL;
         }
@@ -208,7 +277,7 @@ namespace Foam {
                 << "No field of type " << pTraits<scalar>::typeName
                     << " with the name " << name << " found or unsupported type for lnGrad\n"
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
 
             return NULL;
         }
@@ -219,7 +288,7 @@ namespace Foam {
     {
         notImplemented("FaPatchValueExpressionDriver::toFace(const Field<Type> &pField)");
 
-        // primitivePatchInterpolation inter(patch_.patch());        
+        // primitivePatchInterpolation inter(patch_.patch());
         // tmp<Field<Type> > result=inter.pointToFaceInterpolate(pField);
 
         tmp<Field<Type> > result(new Field<Type>(0));
@@ -232,7 +301,7 @@ namespace Foam {
     {
         notImplemented("FaPatchValueExpressionDriver::toPoint(const Field<Type> &fField)");
 
-        // primitivePatchInterpolation inter(patch_.patch());        
+        // primitivePatchInterpolation inter(patch_.patch());
         // tmp<Field<Type> > result=inter.faceToPointInterpolate(fField);
 
         tmp<Field<Type> > result(new Field<Type>(0));

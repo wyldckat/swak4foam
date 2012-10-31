@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -37,7 +37,7 @@ SourceFiles
     SampledSetValueExpressionDriverI.H
     SampledSetValueExpressionDriver.C
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef SampledSetValueExpressionDriver_H
@@ -62,13 +62,15 @@ class SampledSetValueExpressionDriver
 :
     public SubsetValueExpressionDriver
 {
+    static word driverName_;
+
     // Private data
-    sampledSet &theSet_;
+    const sampledSet &theSet_;
 
     // Private Member Functions
 
     template<class Type,class volField,class surfField>
-    Field<Type> *sampleOrInterpolateInternal(const word &name);
+    Field<Type> *sampleOrInterpolateInternal(const word &name,bool oldTime=false);
 
     static void setDebug();
 
@@ -86,7 +88,9 @@ public:
      //- Runtime type information
     TypeName("SampledSetValueExpressionDriver");
 
-   // Constructors
+    static const word &driverName() { return driverName_; }
+
+    // Constructors
 
     //- Construct from components
     SampledSetValueExpressionDriver(
@@ -94,15 +98,22 @@ public:
         bool autoInterpolate=false,
         bool warnAutoInterpolate=true
     );
-    
+
     //- Construct from an id
     SampledSetValueExpressionDriver(const word& id,const fvMesh&mesh);
-    
+
     //- Construct from a dictionary
     SampledSetValueExpressionDriver(const dictionary& dict,const fvMesh&mesh);
-    
+
 //     //- Copy construct
-//     SampledSetValueExpressionDriver(const sampledSet &,const SampledSetValueExpressionDriver&);
+    SampledSetValueExpressionDriver(const sampledSet &,const SampledSetValueExpressionDriver&);
+
+    autoPtr<CommonValueExpressionDriver> clone() const
+        {
+            return autoPtr<CommonValueExpressionDriver>(
+                new SampledSetValueExpressionDriver(theSet_,*this)
+            );
+        }
 
     // Destructor
 
@@ -130,15 +141,15 @@ public:
 
     virtual bool isCell() { return false; }
 
-    virtual Field<scalar> *getScalarField(const string &name);
+    virtual Field<scalar> *getScalarField(const string &name,bool oldTime=false);
 
-    virtual Field<vector> *getVectorField(const string &name);
+    virtual Field<vector> *getVectorField(const string &name,bool oldTime=false);
 
-    virtual Field<tensor> *getTensorField(const string &name);
+    virtual Field<tensor> *getTensorField(const string &name,bool oldTime=false);
 
-    virtual Field<symmTensor> *getSymmTensorField(const string &name);
+    virtual Field<symmTensor> *getSymmTensorField(const string &name,bool oldTime=false);
 
-    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name);
+    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name,bool oldTime=false);
 
     // Handling the parser
     //    void parse(const std::string& f);
@@ -154,6 +165,16 @@ public:
 
 //     template<class Type>
 //     virtual Field<Type> *toPoint(const Field<Type> &)=0;
+
+    //- return a new plugin-function
+    virtual autoPtr<CommonPluginFunction> newPluginFunction(
+        const word &name
+    );
+
+    //- tests for a plugin-function
+    virtual bool existsPluginFunction(
+        const word &name
+    );
 };
 
 

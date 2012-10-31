@@ -74,14 +74,19 @@ void Foam::expressionToCell::combine(topoSet& set, const bool add) const
             true, // search in memory
             true  // search on disc
         );
+
+    if(dict_.valid()) {
+        driver.readVariablesAndTables(dict_());
+        driver.clearVariables();
+    }
     driver.parse(expression_);
-    if(!driver.resultIsLogical()) {
+    if(!driver.resultIsTyp<volScalarField>(true)) {
         FatalErrorIn("Foam::expressionToCell::combine(topoSet& set, const bool add) const")
             << "Expression " << expression_ << " does not evaluate to a logical expression"
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
     }
-    const volScalarField &condition=driver.getScalar();
+    const volScalarField &condition=driver.getResult<volScalarField>();
 
     forAll(condition, cellI)
     {
@@ -114,7 +119,8 @@ Foam::expressionToCell::expressionToCell
 )
 :
     topoSetSource(mesh),
-    expression_(dict.lookup("expression"))
+    expression_(dict.lookup("expression")),
+    dict_(new dictionary(dict))
 {}
 
 

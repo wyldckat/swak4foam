@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -33,7 +33,7 @@ Application
 
 Description
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
@@ -43,14 +43,75 @@ Description
 
 #include "timeSelector.H"
 
+#include "areaFields.H"
+
+#include "printSwakVersion.H"
+
+template<class T,template<class> class PField,class Mesh>
+void writeVolumeField(
+    const string &name,
+    const faMesh &mesh,
+    const string &time,
+    const dimensioned<T> &init,
+    const GeometricField<T,PField,Mesh> &theField
+);
+
+template<class T,class Mesh>
+void writeVolumeField(
+    const string &name,
+    const faMesh &mesh,
+    const string &time,
+    const dimensioned<T> &init,
+    const GeometricField<T,faPatchField,Mesh> &theField
+) {
+    word vName(name+"Volume");
+    Info << " Writing volume field to " << vName << endl;
+
+    typedef GeometricField<T,fvPatchField,volMesh> vField;
+
+    vField volField(
+        IOobject
+        (
+            vName,
+            time,
+            dynamic_cast<const fvMesh&>(mesh.thisDb()),
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        dynamic_cast<const fvMesh&>(mesh.thisDb()),
+        init,
+        "fixedValue"
+    );
+
+    volSurfaceMapping mapper(mesh);
+
+    mapper.mapToVolume(theField, volField.boundaryField());
+    volField.write();
+}
+
+template<class T,template<class> class PField,class Mesh>
+void writeVolumeField(
+    const string &name,
+    const faMesh &mesh,
+    const string &time,
+    const dimensioned<T> &init,
+    const GeometricField<T,PField,Mesh> &theField
+) {
+    typedef GeometricField<T,PField,Mesh> aFieldType;
+
+    WarningIn("template<class T,template<class> class PField,class Mesh> void writeVolumeField")
+        << "No way to interpolate a " << pTraits<aFieldType>::typeName
+            << " to a volume-field. Skipping" << endl;
+}
+
 template<class T>
 void setField
 (
     const string &name,
     const faMesh &mesh,
     const string &time,
-    const GeometricField<T,faPatchField,areaMesh> &result,
-    const areaScalarField &cond,
+    const T &result,
+    const scalarField &cond,
     bool create,
     const dimensionSet &dim,
     bool keepPatches,
@@ -58,15 +119,13 @@ void setField
     bool createVolumeField,
     bool noWrite
 ) {
-    dimensioned<T> init("nix",dim,pTraits<T>::zero);
-    typedef GeometricField<T,faPatchField,areaMesh> aField;
-    typedef GeometricField<T,fvPatchField,volMesh> vField;
+    dimensioned<typename T::value_type> init("nix",dim,typename T::value_type());
 
-    aField *tmp;
+    T *pTemp;
     if(create) {
-      tmp=new aField
+      pTemp=new T
         (
-            IOobject  
+            IOobject
             (
                 name,
                 time,
@@ -78,9 +137,9 @@ void setField
             init
         );
     } else {
-      tmp=new aField
+      pTemp=new T
         (
-            IOobject  
+            IOobject
             (
                 name,
                 time,
@@ -92,55 +151,56 @@ void setField
         );
     }
 
-    FaFieldValueExpressionDriver::makePatches(*tmp,keepPatches,valuePatches);
+    FaFieldValueExpressionDriver::makePatches(*pTemp,keepPatches,valuePatches);
+
+    FaFieldValueExpressionDriver::copyCalculatedPatches(*pTemp,result);
 
     label setCells=0;
 
-    forAll(*tmp,cellI) {
+    forAll(*pTemp,cellI) {
         if(cond[cellI]!=0) {
-	  (*tmp)[cellI]=result[cellI];
+	  (*pTemp)[cellI]=result[cellI];
             setCells++;
         }
     }
 
-    label totalCells=tmp->size();
+    label totalCells=pTemp->size();
     reduce(totalCells,plusOp<label>());
     reduce(setCells,plusOp<label>());
 
-    FaFieldValueExpressionDriver::setValuePatches(*tmp,keepPatches,valuePatches);
+    FaFieldValueExpressionDriver::setValuePatches(
+        *pTemp,
+        keepPatches,
+        valuePatches
+    );
+
+    forAll(result.boundaryField(),patchI) {
+        typename T::PatchFieldType &pf=pTemp->boundaryField()[patchI];
+        const typename T::PatchFieldType &pfOrig=result.boundaryField()[patchI];
+
+        if(pf.patch().coupled()) {
+            pf==pfOrig;
+        }
+    }
 
     Info << " Setting " << setCells << " of " << totalCells << " cells" << endl;
 
     if(!noWrite) {
         Info << " Writing to " << name << endl;
-        
-        tmp->write();
+
+        pTemp->write();
     }
 
     if(createVolumeField) {
-        word vName(name+"Volume");
-        Info << " Writing volume field to " << vName << endl;
-        
-        vField volField(
-            IOobject  
-            (
-                vName,
-                time,
-                dynamic_cast<const fvMesh&>(mesh.thisDb()),
-		IOobject::NO_READ,
-                IOobject::NO_WRITE
-            ),
-            dynamic_cast<const fvMesh&>(mesh.thisDb()),
+        writeVolumeField(
+            name,
+            mesh,
+            time,
             init,
-            "fixedValue"
+            *pTemp
         );
-
-        volSurfaceMapping mapper(mesh);
-
-        mapper.mapToVolume(*tmp, volField.boundaryField());
-        volField.write();       
     }
-    delete tmp;
+    delete pTemp;
 }
 
 void doAnExpression
@@ -161,10 +221,10 @@ void doAnExpression
     bool noWrite
 ) {
     const string &time = runTime.timeName();
-    bool isScalar=false;
+    word oldFieldType="none";
 
     if(!create) {
-        IOobject f 
+        IOobject f
             (
                 field,
                 time,
@@ -173,29 +233,23 @@ void doAnExpression
                 IOobject::NO_WRITE
             );
         f.headerOk();
-        
-        word classN=f.headerClassName();
-        if(classN=="areaScalarField") {
-            isScalar=true;
-        } else if (classN!="areaVectorField") {
-            FatalErrorIn("doAnExpression()")
-                //            << args.executable()
-                << " unsupported type " << classN << " of field " 
-                    << field << " or not existing at time " << time
-                    << exit(FatalError);
-        }
+
+        oldFieldType=f.headerClassName();
+
+        Info << " Modifying field " << field
+            << " of type " << oldFieldType << "\n" << endl;
     } else {
         Info << " Creating field " << field << "\n" << endl;
     }
 
-    Info << " Putting " << expression << " into field " << field 
-        << " at t = " << time << " if condition " << condition 
+    Info << " Putting " << expression << " into field " << field
+        << " at t = " << time << " if condition " << condition
         << " is true" << endl;
     if(keepPatches) {
         Info << " Keeping patches unaltered" << endl;
     } else {
         if(valuePatches.size()>0) {
-            Info << " Setting the patches " << valuePatches 
+            Info << " Setting the patches " << valuePatches
                 << " to fixed value" << endl;
         }
     }
@@ -212,52 +266,215 @@ void doAnExpression
     driver.readVariablesAndTables(dict);
 
     if (doDebug) {
-        Info << "Parsing expression: " << expression << "\nand condition " 
-            << condition << "\n" << endl; 
+        Info << "Parsing expression: " << expression << "\nand condition "
+            << condition << "\n" << endl;
         driver.setTrace(true,true);
     }
 
     driver.clearVariables();
 
-    driver.parse(condition);
-    if(!driver.resultIsLogical()) {
-        FatalErrorIn("doAnExpression()")
-                << " condition: " << condition 
-                    << " does not evaluate to a logical expression" 
-                    << exit(FatalError);
-    }
+    scalarField conditionField;
+    bool evaluatedCondition=false;
+    bool conditionIsSurface=false;
+    if(condition!="true") {
+        evaluatedCondition=true;
 
-    areaScalarField conditionField(driver.getScalar());
-
-    driver.parse(expression);
-
-    if(create) {
-        if(driver.resultIsVector()) {
-            isScalar=false;
-        } else if(driver.resultIsScalar()) {
-            isScalar=true;
-        } else {
+        driver.parse(condition);
+        if(
+            !driver.resultIsTyp<areaScalarField>(true)
+            &&
+            !driver.resultIsTyp<edgeScalarField>(true)
+        ) {
             FatalErrorIn("doAnExpression()")
-                << " result is neither scalar nor vector" 
-            << exit(FatalError);
+                << " condition: " << condition
+                    << " does not evaluate to a logical expression"
+                    << exit(FatalError);
+        }
+
+        if(driver.resultIsTyp<areaScalarField>(true)) {
+            conditionField=driver.getResult<areaScalarField>().internalField();
+            conditionIsSurface=false;
+        } else {
+            conditionField=driver.getResult<edgeScalarField>().internalField();
+            conditionIsSurface=true;
         }
     }
 
-    if(driver.resultIsVector()==isScalar) {
+    if (doDebug) {
+        Info << "funkySetAreaFields : Parsing expression:"
+            << expression << endl;
+    }
+    driver.parse(expression);
+    if (doDebug) {
+        Info << "funkySetAreaFields : Parsed expression" << endl;
+    }
+
+    if(!evaluatedCondition) {
+        conditionIsSurface=driver.isSurfaceField();
+
+        if(conditionIsSurface) {
+            conditionField=scalarField(driver.aMesh().edges().size(),1);
+        } else {
+            conditionField=scalarField(driver.aMesh().faces().size(),1);
+        }
+    }
+
+    if(create) {
+        oldFieldType=driver.typ();
+    }
+
+    if(conditionIsSurface!=driver.isSurfaceField()) {
+        FatalErrorIn("doAnExpression()")
+            << "Inconsistent expression and condition. "
+                << "Expression " << expression << " is defined on the "
+                << (driver.isSurfaceField() ? "edges" : "faces")
+                << " while condition " << condition << " is defined on "
+                << (conditionIsSurface ? "edges" : "faces")
+                << endl
+                << exit(FatalError);
+    }
+
+    if(driver.typ()!=oldFieldType) {
         FatalErrorIn("doAnExpression()")
             //            << args.executable()
-                << " inconsistent types: " << field << " is  " 
-                    << (isScalar ? "scalar" : "vector" ) 
-                    << " while the expression evaluates to a " 
-                    << (!driver.resultIsVector() ? "scalar" : "vector" )
+                << " inconsistent types: " << field << " is  "
+                    << oldFieldType
+                    << " while the expression evaluates to a "
+                    << driver.typ()
             << exit(FatalError);
     } else {
-        if(isScalar) {
+        if(driver.typ()==pTraits<areaScalarField>::typeName) {
             setField(
                 field,
                 driver.aMesh(),
                 time,
-                driver.getScalar(),
+                driver.getResult<areaScalarField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<areaVectorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<areaVectorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<areaTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<areaTensorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<areaSymmTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<areaSymmTensorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<areaSphericalTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<areaSphericalTensorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<edgeScalarField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<edgeScalarField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<edgeVectorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<edgeVectorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<edgeTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<edgeTensorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<edgeSymmTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<edgeSymmTensorField>(),
+                conditionField,
+                create,
+                dim,
+                keepPatches,
+                valuePatches,
+                createVolumeField,
+                noWrite
+            );
+        } else if(driver.typ()==pTraits<edgeSphericalTensorField>::typeName) {
+            setField(
+                field,
+                driver.aMesh(),
+                time,
+                driver.getResult<edgeSphericalTensorField>(),
                 conditionField,
                 create,
                 dim,
@@ -267,19 +484,11 @@ void doAnExpression
                 noWrite
             );
         } else {
-	  setField(
-              field,
-              driver.aMesh(),
-              time,
-              driver.getVector(),
-              conditionField,
-              create,
-              dim,
-              keepPatches,
-              valuePatches,
-              createVolumeField,
-              noWrite
-          );
+            FatalErrorIn("doAnExpression")
+                << "Expression " << expression
+                    << " evaluates to an unsupported type "
+                    << driver.typ() << endl
+                    << exit(FatalError);
         }
     }
 }
@@ -309,9 +518,11 @@ int main(int argc, char *argv[])
 
 #   include "setRootCase.H"
 
+    printSwakVersion();
+
     // make sure the program never fails due to dimension "problems"
     dimensionSet::debug=false;
-    
+
     if (!args.options().found("time") && !args.options().found("latestTime")) {
         FatalErrorIn("main()")
             << args.executable()
@@ -339,7 +550,7 @@ int main(int argc, char *argv[])
             Info << " Using command-line options\n" << endl;
 
             word field=args.options()["field"];
-        
+
             string expression=args.options()["expression"];
 
             string condition="true";
@@ -348,7 +559,7 @@ int main(int argc, char *argv[])
             }
 
             string dimString="[0 0 0 0 0]";
-	
+
             if (args.options().found("dimension")) {
                 dimString=args.options()["dimension"];
             }
@@ -375,7 +586,7 @@ int main(int argc, char *argv[])
             if (args.options().found("valuePatches")) {
                 valuePatchesString=args.options()["valuePatches"];
             }
-            IStringStream valuePatchesStream("("+valuePatchesString+")"); 
+            IStringStream valuePatchesStream("("+valuePatchesString+")");
             wordList valuePatches(valuePatchesStream);
 
             dictionary dummyDict;
@@ -406,17 +617,17 @@ int main(int argc, char *argv[])
             );
         } else {
             Info << " Using funkySetAreaFieldsDict \n" << endl;
-        
+
             if(
-                args.options().found("keepPatches") 
+                args.options().found("keepPatches")
                 ||
                 args.options().found("valuePatches")
                 ||
                 args.options().found("create")
-                || 
+                ||
                 args.options().found("dimension")
                 ||
-                args.options().found("condition") 
+                args.options().found("condition")
                 ||
                 args.options().found("expression")
             ) {
@@ -428,11 +639,11 @@ int main(int argc, char *argv[])
 
             word dictName="funkySetAreaFieldsDict";
 
-            if(args.options().found("region")) {                
+            if(args.options().found("region")) {
                 dictName+="."+args.options()["region"];
             }
 
-            if(args.options().found("dictExt")) {                
+            if(args.options().found("dictExt")) {
                 dictName+="."+args.options()["dictExt"];
             }
 
@@ -518,7 +729,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    
+
     Info << "End\n" << endl;
 
     return 0;

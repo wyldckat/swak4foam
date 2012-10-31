@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,10 +28,11 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "FaceZoneValueExpressionDriver.H"
+#include "FaceZoneValuePluginFunction.H"
 
 #include "addToRunTimeSelectionTable.H"
 
@@ -40,6 +41,8 @@ namespace Foam {
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(FaceZoneValueExpressionDriver, 0);
+
+word FaceZoneValueExpressionDriver::driverName_="faceZone";
 
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceZoneValueExpressionDriver, dictionary, faceZone);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceZoneValueExpressionDriver, idName, faceZone);
@@ -58,7 +61,7 @@ label getFaceZoneID(const fvMesh &mesh,const word &name)
             << "The faceZone " << name << " was not found in "
                 << mesh.faceZones().names()
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
 
     }
     return result;
@@ -85,9 +88,17 @@ FaceZoneValueExpressionDriver::FaceZoneValueExpressionDriver(const dictionary& d
  :
     SubsetValueExpressionDriver(dict),
     faceZone_(
-        regionMesh(dict,mesh).faceZones()[
+        regionMesh(
+            dict,
+            mesh,
+            searchOnDisc()
+        ).faceZones()[
             getFaceZoneID(
-                regionMesh(dict,mesh),
+                regionMesh(
+                    dict,
+                    mesh,
+                    searchOnDisc()
+                ),
                 dict.lookup(
                     "zoneName"
                 )
@@ -119,34 +130,54 @@ FaceZoneValueExpressionDriver::~FaceZoneValueExpressionDriver()
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 template<>
-inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceZone::const_iterator &it) 
+inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceZone::const_iterator &it)
 {
     return *it;
 }
 
-Field<scalar> *FaceZoneValueExpressionDriver::getScalarField(const string &name)
+    Field<scalar> *FaceZoneValueExpressionDriver::getScalarField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceScalarField,volScalarField,faceZone,scalar>(name,faceZone_);
+    return getFieldInternalAndInterpolate<surfaceScalarField,volScalarField,faceZone,scalar>(
+        name,
+        faceZone_,
+        oldTime
+    );
 }
 
-Field<vector> *FaceZoneValueExpressionDriver::getVectorField(const string &name)
+Field<vector> *FaceZoneValueExpressionDriver::getVectorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceVectorField,volVectorField,faceZone,vector>(name,faceZone_);
+    return getFieldInternalAndInterpolate<surfaceVectorField,volVectorField,faceZone,vector>(
+        name,
+        faceZone_,
+        oldTime
+    );
 }
 
-Field<tensor> *FaceZoneValueExpressionDriver::getTensorField(const string &name)
+Field<tensor> *FaceZoneValueExpressionDriver::getTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceTensorField,volTensorField,faceZone,tensor>(name,faceZone_);
+    return getFieldInternalAndInterpolate<surfaceTensorField,volTensorField,faceZone,tensor>(
+        name,
+        faceZone_,
+        oldTime
+    );
 }
 
-Field<symmTensor> *FaceZoneValueExpressionDriver::getSymmTensorField(const string &name)
+Field<symmTensor> *FaceZoneValueExpressionDriver::getSymmTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceSymmTensorField,volSymmTensorField,faceZone,symmTensor>(name,faceZone_);
+    return getFieldInternalAndInterpolate<surfaceSymmTensorField,volSymmTensorField,faceZone,symmTensor>(
+        name,
+        faceZone_,
+        oldTime
+    );
 }
 
-Field<sphericalTensor> *FaceZoneValueExpressionDriver::getSphericalTensorField(const string &name)
+Field<sphericalTensor> *FaceZoneValueExpressionDriver::getSphericalTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceSphericalTensorField,volSphericalTensorField,faceZone,sphericalTensor>(name,faceZone_);
+    return getFieldInternalAndInterpolate<surfaceSphericalTensorField,volSphericalTensorField,faceZone,sphericalTensor>(
+        name,
+        faceZone_,
+        oldTime
+    );
 }
 
 vectorField *FaceZoneValueExpressionDriver::makePositionField()
@@ -159,7 +190,7 @@ scalarField *FaceZoneValueExpressionDriver::makeCellVolumeField()
     FatalErrorIn("FaceZoneValueExpressionDriver::makeCellVolumeField()")
         << "faceZone knows nothing about cells"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -197,6 +228,26 @@ vectorField *FaceZoneValueExpressionDriver::makeFaceNormalField()
 vectorField *FaceZoneValueExpressionDriver::makeFaceAreaField()
 {
     return getFromFieldInternal(this->mesh().Sf(),faceZone_);
+}
+
+autoPtr<CommonPluginFunction> FaceZoneValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        FaceZoneValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool FaceZoneValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return FaceZoneValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

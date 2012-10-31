@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -37,7 +37,7 @@ SourceFiles
     SubsetValueExpressionDriverI.H
     SubsetValueExpressionDriver.C
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef SubsetValueExpressionDriver_H
@@ -86,7 +86,7 @@ class SubsetValueExpressionDriver
 
 protected:
 
-    // Handling the scanner 
+    // Handling the scanner
     void scan_begin();
     void scan_end();
 
@@ -96,15 +96,33 @@ protected:
 
     //- General Method to get the values
     template<class FieldType,class Subset,class T>
-    Field<T> *getFieldInternal(const string &name,const Subset &sub);
+    Field<T> *getFieldInternal(
+        const string &name,
+        const Subset &sub,
+        bool oldTime=false
+    );
 
     //- General Method to get the values and interpolate
     template<class FieldType,class IFieldType,class Subset,class T>
-    Field<T> *getFieldInternalAndInterpolate(const string &name,const Subset &sub);
+    Field<T> *getFieldInternalAndInterpolate(
+        const string &name,
+        const Subset &sub,
+        bool oldTime=false
+    );
 
     //- General Method to get values from a field
     template<class Subset,class T>
     Field<T> *getFromFieldInternal(const Field<T> &original,const Subset &sub);
+
+    //- set the state of the lexer to scanning vector components
+    void startVectorComponent();
+
+    //- set the state of the lexer to scanning tensor components
+    void startTensorComponent();
+
+    //- set the state to "eat characters"
+    void startEatCharacters();
+
 public:
 
      //- Runtime type information
@@ -117,7 +135,7 @@ public:
         bool autoInterpolate=false,
         bool warnAutoInterpolate=true
     );
-    
+
     //- Copy construct
     SubsetValueExpressionDriver(const SubsetValueExpressionDriver&);
 
@@ -152,24 +170,56 @@ public:
 //     template<class Type>
 //     Field<Type> *getField(const string &name);
 
-    virtual Field<scalar> *getScalarField(const string &name)=0;
+    virtual Field<scalar> *getScalarField(
+        const string &name,
+        bool oldTime=false
+    )=0;
 
-    virtual Field<vector> *getVectorField(const string &name)=0;
+    virtual Field<vector> *getVectorField(
+        const string &name,
+        bool oldTime=false
+    )=0;
 
-    virtual Field<tensor> *getTensorField(const string &name)=0;
+    virtual Field<tensor> *getTensorField(
+        const string &name,
+        bool oldTime=false
+    )=0;
 
-    virtual Field<symmTensor> *getSymmTensorField(const string &name)=0;
+    virtual Field<symmTensor> *getSymmTensorField(
+        const string &name,
+        bool oldTime=false
+    )=0;
 
-    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name)=0;
+    virtual Field<sphericalTensor> *getSphericalTensorField(
+        const string &name,
+        bool oldTime=false
+    )=0;
 
     // Handling the parser
-    void parse(const std::string& f);
+    void parseInternal(int startToken);
+
+    //- execute a plugin-function
+    template<class T>
+    autoPtr<Field<T> > evaluatePluginFunction(
+        const string &name,
+        const parserSubset::location &loc,
+        int &scanned,
+        bool isPoint=false
+    );
+
+    static const SymbolTable<SubsetValueExpressionDriver> &symbolTable();
+
+    int startupSymbol(const word &name);
 
 //     template<class Type>
 //     virtual Field<Type> *toFace(const Field<Type> &)=0;
 
 //     template<class Type>
 //     virtual Field<Type> *toPoint(const Field<Type> &)=0;
+
+    // allow access to protected methods
+    friend class parserSubset::SubsetValueExpressionParser;
+
 };
 
 

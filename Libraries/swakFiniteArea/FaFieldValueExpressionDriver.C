@@ -1,6 +1,8 @@
-//  ICE Revision: $Id$ 
+//  ICE Revision: $Id$
 
 #include "FaFieldValueExpressionDriver.H"
+#include "FaFieldValuePluginFunction.H"
+
 #include <Random.H>
 #include <dimensionedVector.H>
 #include "zeroGradientFaPatchFields.H"
@@ -9,6 +11,8 @@
 #include "addToRunTimeSelectionTable.H"
 
 namespace Foam {
+
+word FaFieldValueExpressionDriver::driverName_="internalFaField";
 
 defineTypeNameAndDebug(FaFieldValueExpressionDriver, 0);
 
@@ -22,10 +26,12 @@ FaFieldValueExpressionDriver::FaFieldValueExpressionDriver (
     : FaCommonValueExpressionDriver(
         false,
         true,
-        false        
+        false
     ),
       mesh_(faRegionMesh(mesh)),
-      typ_(NO_TYPE),
+      typ_("nothing"),
+      isLogical_(false),
+      isSurfaceField_(false),
       resultDimension_(0,0,0,0,0,0,0)
 {
 }
@@ -39,10 +45,12 @@ FaFieldValueExpressionDriver::FaFieldValueExpressionDriver (
     : FaCommonValueExpressionDriver(
         cacheReadFields,
         searchInMemory,
-        searchOnDisc        
+        searchOnDisc
     ),
       mesh_(faRegionMesh(mesh)),
-      typ_(NO_TYPE),
+      typ_("nothing"),
+      isLogical_(false),
+      isSurfaceField_(false),
       resultDimension_(0,0,0,0,0,0,0)
 {
 }
@@ -52,8 +60,16 @@ FaFieldValueExpressionDriver::FaFieldValueExpressionDriver (
     const fvMesh &mesh
 )
     : FaCommonValueExpressionDriver(dict),
-      mesh_(faRegionMesh(regionMesh(dict,mesh))),
-      typ_(NO_TYPE),
+      mesh_(
+          faRegionMesh(
+              regionMesh(
+                  dict,
+                  mesh,
+                  searchOnDisc()
+              ))),
+      typ_("nothing"),
+      isLogical_(false),
+      isSurfaceField_(false),
       resultDimension_(0,0,0,0,0,0,0)
 {
     if(dict.found("dimensions")) {
@@ -65,60 +81,16 @@ FaFieldValueExpressionDriver::~FaFieldValueExpressionDriver ()
 {
 }
 
-void FaFieldValueExpressionDriver::setScalarResult(areaScalarField *r) {
-    if(debug) {
-        Info << "FaFieldValueExpressionDriver::setScalarResult(areaScalarField *r)" << endl;
-    }
-
-    sresult_.reset(r);
-
-    if(!resultDimension_.dimensionless()) {
-        sresult_->dimensions().reset(resultDimension_);
-    }
-    typ_=SCALAR_TYPE;
-    result_.setResult(sresult_->internalField());
-}
-
-void FaFieldValueExpressionDriver::setLogicalResult(areaScalarField *r) {
-    if(debug) {
-        Info << "FaFieldValueExpressionDriver::setLogicalResult(areaScalarField *r)" << endl;
-    }
-
-    sresult_.reset(r);
-
-    typ_=LOGICAL_TYPE;
-    result_.setResult(sresult_->internalField());
-}
-
-void FaFieldValueExpressionDriver::setVectorResult(areaVectorField *r) {
-    if(debug) {
-        Info << "FaFieldValueExpressionDriver::setVectorResult(areaVectorField *r)" << endl;
-    }
-
-    vresult_.reset(r);
-
-    if(!resultDimension_.dimensionless()) {
-        vresult_->dimensions().reset(resultDimension_);
-    }
-    typ_=VECTOR_TYPE;
-    result_.setResult(vresult_->internalField());
-}
-
-void FaFieldValueExpressionDriver::parse (const std::string &f)
+void FaFieldValueExpressionDriver::parseInternal (int startToken)
 {
-    content_ = f;
-    if(debug) {
-        Info << "FaField-parsing: " << content_ << endl;
-    }
-    scan_begin ();
-    parserFaField::FaFieldValueExpressionParser parser (*this);
-    if(debug) {
-        Info << "FaFieldTrace: " << trace_parsing_ << endl;
-        trace_parsing_=1;
-    }
-    parser.set_debug_level (trace_parsing_);
+    parserFaField::FaFieldValueExpressionParser parser (
+        scanner_,
+        *this,
+        startToken,
+        0
+    );
+    parser.set_debug_level (traceParsing());
     parser.parse ();
-    scan_end ();
 }
 
 areaScalarField *FaFieldValueExpressionDriver::makeModuloField(
@@ -134,7 +106,7 @@ areaScalarField *FaFieldValueExpressionDriver::makeModuloField(
             if(val>0) {
                 val-=b[cellI];
             } else {
-                val+=b[cellI];
+                val=b[cellI];
             }
         }
 
@@ -237,7 +209,7 @@ edgeVectorField *FaFieldValueExpressionDriver::makeEdgeProjectionField()
 
     vector fmin(0,0,0);
     vector fmax(0,0,0);
-    
+
     forAll(*f,faceI)
     {
         const edge &fProp = mesh_.edges()[faceI];
@@ -248,15 +220,15 @@ edgeVectorField *FaFieldValueExpressionDriver::makeEdgeProjectionField()
             forAll(mesh_.points()[0],compI)
             {
                 if(
-                    mesh_.points()[fProp[pointI]].component(compI) 
-                    < 
+                    mesh_.points()[fProp[pointI]].component(compI)
+                    <
                     fmin.component(compI)
                 ) {
                     fmin.component(compI) = mesh_.points()[fProp[pointI]].component(compI);
                 }
                 if(
-                    mesh_.points()[fProp[pointI]].component(compI) 
-                    > 
+                    mesh_.points()[fProp[pointI]].component(compI)
+                    >
                     fmax.component(compI)
                 ) {
                     fmax.component(compI) = mesh_.points()[fProp[pointI]].component(compI);
@@ -269,7 +241,7 @@ edgeVectorField *FaFieldValueExpressionDriver::makeEdgeProjectionField()
     {
         labelList cNumbers = mesh_.boundary()[patchI].edgeFaces();
         faePatchVectorField & fFace = f->boundaryField()[patchI];
-        
+
         forAll(fFace,faceI)
         {
             const face & cProp(mesh_.faces()[cNumbers[faceI]]);
@@ -290,14 +262,14 @@ edgeVectorField *FaFieldValueExpressionDriver::makeEdgeProjectionField()
                         forAll(mesh_.points()[0],compI)
                         {
                             if(
-                                mesh_.points()[fProp[pointI]].component(compI) 
-                                < 
+                                mesh_.points()[fProp[pointI]].component(compI)
+                                <
                                 fmin.component(compI)
                             ) {
                                 fmin.component(compI) = mesh_.points()[fProp[pointI]].component(compI);
                             }
                             if(
-                                mesh_.points()[fProp[pointI]].component(compI) 
+                                mesh_.points()[fProp[pointI]].component(compI)
                                 >
                                 fmax.component(compI)
                             ) {
@@ -432,6 +404,286 @@ edgeVectorField *FaFieldValueExpressionDriver::makeEdgeVectorField
     }
 
     return f;
+}
+
+areaTensorField *FaFieldValueExpressionDriver::makeTensorField
+(
+    areaScalarField *xx,areaScalarField *xy,areaScalarField *xz,
+    areaScalarField *yx,areaScalarField *yy,areaScalarField *yz,
+    areaScalarField *zx,areaScalarField *zy,areaScalarField *zz
+) {
+    areaTensorField *f=makeConstantField<areaTensorField>(tensor(0,0,0,0,0,0,0,0,0));
+
+    forAll(*f,cellI) {
+        (*f)[cellI]=tensor(
+            (*xx)[cellI],(*xy)[cellI],(*xz)[cellI],
+            (*yx)[cellI],(*yy)[cellI],(*yz)[cellI],
+            (*zx)[cellI],(*zy)[cellI],(*zz)[cellI]
+        );
+    }
+
+    f->correctBoundaryConditions();
+
+    return f;
+}
+
+areaSymmTensorField *FaFieldValueExpressionDriver::makeSymmTensorField
+(
+    areaScalarField *xx,areaScalarField *xy,areaScalarField *xz,
+    areaScalarField *yy,areaScalarField *yz,
+    areaScalarField *zz
+) {
+    areaSymmTensorField *f=makeConstantField<areaSymmTensorField>(symmTensor(0,0,0,0,0,0));
+
+    forAll(*f,cellI) {
+        (*f)[cellI]=symmTensor(
+            (*xx)[cellI],(*xy)[cellI],(*xz)[cellI],
+            (*yy)[cellI],(*yz)[cellI],
+            (*zz)[cellI]
+        );
+    }
+
+    f->correctBoundaryConditions();
+
+    return f;
+}
+
+areaSphericalTensorField *FaFieldValueExpressionDriver::makeSphericalTensorField
+(
+    areaScalarField *xx
+) {
+    areaSphericalTensorField *f=makeConstantField<areaSphericalTensorField>(sphericalTensor(0));
+
+    forAll(*f,cellI) {
+        (*f)[cellI]=sphericalTensor(
+            (*xx)[cellI]
+        );
+    }
+
+    f->correctBoundaryConditions();
+
+    return f;
+}
+
+edgeTensorField *FaFieldValueExpressionDriver::makeEdgeTensorField
+(
+    edgeScalarField *xx,edgeScalarField *xy,edgeScalarField *xz,
+    edgeScalarField *yx,edgeScalarField *yy,edgeScalarField *yz,
+    edgeScalarField *zx,edgeScalarField *zy,edgeScalarField *zz
+) {
+    edgeTensorField *f=makeConstantField<edgeTensorField>(tensor(0,0,0,0,0,0,0,0,0));
+
+    forAll(*f,faceI) {
+        (*f)[faceI]=tensor(
+            (*xx)[faceI],(*xy)[faceI],(*xz)[faceI],
+            (*yx)[faceI],(*yy)[faceI],(*yz)[faceI],
+            (*zx)[faceI],(*zy)[faceI],(*zz)[faceI]
+        );
+    }
+
+    return f;
+}
+
+edgeSymmTensorField *FaFieldValueExpressionDriver::makeEdgeSymmTensorField
+(
+    edgeScalarField *xx,edgeScalarField *xy,edgeScalarField *xz,
+    edgeScalarField *yy,edgeScalarField *yz,
+    edgeScalarField *zz
+) {
+    edgeSymmTensorField *f=makeConstantField<edgeSymmTensorField>(symmTensor(0,0,0,0,0,0));
+
+    forAll(*f,faceI) {
+        (*f)[faceI]=symmTensor(
+            (*xx)[faceI],(*xy)[faceI],(*xz)[faceI],
+            (*yy)[faceI],(*yz)[faceI],
+            (*zz)[faceI]
+        );
+    }
+
+    return f;
+}
+
+edgeSphericalTensorField *FaFieldValueExpressionDriver::makeEdgeSphericalTensorField
+(
+    edgeScalarField *xx
+) {
+    edgeSphericalTensorField *f=makeConstantField<edgeSphericalTensorField>(sphericalTensor(0));
+
+    forAll(*f,faceI) {
+        (*f)[faceI]=sphericalTensor(
+            (*xx)[faceI]
+        );
+    }
+
+    return f;
+}
+
+template<>
+FaFieldValueExpressionDriver::SymbolTable<FaFieldValueExpressionDriver>::SymbolTable()
+:
+StartupSymbols()
+{
+    // default value
+    insert("",parserFaField::FaFieldValueExpressionParser::token::START_DEFAULT);
+
+    insert(
+        "areaScalarField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_SCALAR_COMMA
+    );
+    insert(
+        "areaScalarField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_SCALAR_CLOSE
+    );
+    insert(
+        "areaVectorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_VECTOR_COMMA
+    );
+    insert(
+        "areaVectorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_VECTOR_CLOSE
+    );
+    insert(
+        "areaTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_TENSOR_COMMA
+    );
+    insert(
+        "areaTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_TENSOR_CLOSE
+    );
+    insert(
+        "areaSymmTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_YTENSOR_COMMA
+    );
+    insert(
+        "areaSymmTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_YTENSOR_CLOSE
+    );
+    insert(
+        "areaSphericalTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_HTENSOR_COMMA
+    );
+    insert(
+        "areaSphericalTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_HTENSOR_CLOSE
+    );
+    insert(
+        "areaLogicalField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_LOGICAL_COMMA
+    );
+    insert(
+        "areaLogicalField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_AREA_LOGICAL_CLOSE
+    );
+
+    insert(
+        "edgeScalarField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_SCALAR_COMMA
+    );
+    insert(
+        "edgeScalarField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_SCALAR_CLOSE
+    );
+    insert(
+        "edgeVectorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_VECTOR_COMMA
+    );
+    insert(
+        "edgeVectorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_VECTOR_CLOSE
+    );
+    insert(
+        "edgeTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_TENSOR_COMMA
+    );
+    insert(
+        "edgeTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_TENSOR_CLOSE
+    );
+    insert(
+        "edgeSymmTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_YTENSOR_COMMA
+    );
+    insert(
+        "edgeSymmTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_YTENSOR_CLOSE
+    );
+    insert(
+        "edgeSphericalTensorField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_HTENSOR_COMMA
+    );
+    insert(
+        "edgeSphericalTensorField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_HTENSOR_CLOSE
+    );
+    insert(
+        "edgeLogicalField_SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_LOGICAL_COMMA
+    );
+    insert(
+        "edgeLogicalField_CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_EDGE_LOGICAL_CLOSE
+    );
+
+    insert(
+        "CL",
+        parserFaField::FaFieldValueExpressionParser::token::START_CLOSE_ONLY
+    );
+    insert(
+        "SC",
+        parserFaField::FaFieldValueExpressionParser::token::START_COMMA_ONLY
+    );
+}
+
+const FaFieldValueExpressionDriver::SymbolTable<FaFieldValueExpressionDriver> &FaFieldValueExpressionDriver::symbolTable()
+{
+    static SymbolTable<FaFieldValueExpressionDriver> actualTable;
+
+    return actualTable;
+}
+
+int FaFieldValueExpressionDriver::startupSymbol(const word &name) {
+    return symbolTable()[name];
+}
+
+
+autoPtr<CommonPluginFunction> FaFieldValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        FaFieldValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool FaFieldValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return FaFieldValuePluginFunction::exists(
+        *this,
+        name
+    );
+}
+
+label FaFieldValueExpressionDriver::size() const
+{
+    return mesh_.nFaces();
+}
+
+label FaFieldValueExpressionDriver::pointSize() const
+{
+    return mesh_.nPoints();
+}
+
+const faMesh &FaFieldValueExpressionDriver::aMesh() const
+{
+    return mesh_;
+}
+
+const fvMesh &FaFieldValueExpressionDriver::mesh() const
+{
+    return dynamic_cast<const fvMesh&>(mesh_.thisDb());
 }
 
 } // end namespace

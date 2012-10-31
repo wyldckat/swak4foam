@@ -50,7 +50,7 @@ const fvPatch &getFvPatch(const pointPatch &pp) {
             << " This will only work if I can find a fvMesh, but I only found a "
                 << typeid(pp.boundaryMesh().mesh().db()).name()
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
     }
     const fvMesh &fv=dynamic_cast<const fvMesh &>(pp.boundaryMesh().mesh().db());
     return fv.boundary()[pp.index()];
@@ -89,7 +89,11 @@ groovyBCPointPatchField<Type>::groovyBCPointPatchField
 {
     driver_.readVariablesAndTables(dict);
 
-    this->refValue() = pTraits<Type>::zero;
+    if (dict.found("refValue")) {
+        this->refValue() = Field<Type>("refValue", dict, p.size());
+    } else {
+        this->refValue() = pTraits<Type>::zero;
+    }
 
     if (dict.found("value"))
     {
@@ -115,7 +119,18 @@ groovyBCPointPatchField<Type>::groovyBCPointPatchField
     }
 
     //    this->refGrad() = pTraits<Type>::zero;
-    this->valueFraction() = 1;
+    if (dict.found("valueFraction")) {
+        this->valueFraction() = Field<scalar>("valueFraction", dict, p.size());
+    } else {
+        this->valueFraction() = 1;
+    }
+
+    if(this->evaluateDuringConstruction()) {
+        // make sure that this works with potentialFoam or other solvers that don't evaluate the BCs
+        this->evaluate();
+    } else {
+        // mixed-BC DOES NOT call evaluate during construction
+    }
 }
 
 

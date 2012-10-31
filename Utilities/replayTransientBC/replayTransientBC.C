@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -33,7 +33,7 @@ Application
 
 Description
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
@@ -55,13 +55,10 @@ int main(int argc, char *argv[])
 {
 #   include "addRegionOption.H"
     argList::validOptions.insert("allowFunctionObjects","");
+    argList::validOptions.insert("addDummyPhi","");
 
 #   include "setRootCase.H"
 #   include "createTime.H"
-
-    if(!args.options().found("allowFunctionObjects")) {
-        runTime.functionObjects().off();
-    }
 
 #   include "createNamedMesh.H"
 
@@ -76,6 +73,38 @@ int main(int argc, char *argv[])
             IOobject::NO_WRITE
         )
     );
+
+    if(
+        !args.options().found("allowFunctionObjects")
+        &&
+        !replayDict.lookupOrDefault<bool>("useFunctionObjects",false)
+    ) {
+        runTime.functionObjects().off();
+    }
+
+    autoPtr<surfaceScalarField> dummyPhi;
+
+    if(
+        args.options().found("addDummyPhi")
+        ||
+        replayDict.lookupOrDefault<bool>("addDummyPhi",false)
+    ) {
+        Info << "Adding a dummy phi to make inletOutlet happy" << endl;
+        dummyPhi.set(
+            new surfaceScalarField(
+                IOobject
+                (
+                    "phi",
+                    mesh.time().system(),
+                    mesh,
+                    IOobject::NO_READ,
+                    IOobject::NO_WRITE
+                ),
+                mesh,
+                dimensionedScalar("phi",dimless,0)
+            )
+        );
+    }
 
     const wordList fieldNames = replayDict.lookup("fields");
 
@@ -133,7 +162,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    for (runTime++; !runTime.end(); runTime++)
+    while(runTime.loop())
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
 

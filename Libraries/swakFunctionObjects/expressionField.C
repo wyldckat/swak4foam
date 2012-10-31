@@ -1,4 +1,4 @@
-//  OF-extend Revision: $Id$ 
+//  OF-extend Revision: $Id$
 /*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
@@ -61,12 +61,11 @@ Foam::expressionField::~expressionField()
 
 template<class T>
 void Foam::expressionField::storeField(
-    const T &data,
-    autoPtr<T> &store
+    const T &data
 )
 {
-    if(store.empty()) {
-        store.reset(
+    if(field_.empty()) {
+        field_.reset(
             new T(
                 IOobject(
                     name_,
@@ -79,7 +78,16 @@ void Foam::expressionField::storeField(
             )
         );
     } else {
-        store()==data;
+        //        dynamicCast<T &>(field_())==data; // doesn't work with gcc 4.2
+        dynamic_cast<T &>(field_())==data;
+    }
+
+    if(
+        this->autowrite_
+        &&
+        this->obr_.time().outputTime()
+    ) {
+        field_->write();
     }
 }
 
@@ -91,7 +99,7 @@ void Foam::expressionField::read(const dictionary& dict)
         autowrite_=Switch(dict.lookup("autowrite"));
 
         const fvMesh& mesh = refCast<const fvMesh>(obr_);
-        
+
         driver_.set(
             new FieldValueExpressionDriver(
                 mesh.time().timeName(),
@@ -104,6 +112,9 @@ void Foam::expressionField::read(const dictionary& dict)
         );
 
         driver_->readVariablesAndTables(dict_);
+
+        // this might not work when rereading ... but what is consistent in that case?
+        driver_->createWriterAndRead(name_+"_"+type());
     }
 }
 
@@ -112,33 +123,91 @@ void Foam::expressionField::execute()
     if(active_) {
         FieldValueExpressionDriver &driver=driver_();
 
+        bool oldDimsetDebug=dimensionSet::debug;
+        dimensionSet::debug=false;
+
         driver.clearVariables();
 
         driver.parse(expression_);
 
-        if(driver.resultIsVector()) {
+        dimensionSet::debug=oldDimsetDebug;
+
+        if(driver.resultIsTyp<volVectorField>()) {
             storeField(
-                driver.getVector(),
-                vectorField_
+                driver.getResult<volVectorField>()
             );
-            
-        } else if(driver.resultIsScalar()) {
+        } else if(driver.resultIsTyp<volScalarField>()) {
             storeField(
-                driver.getScalar(),
-                scalarField_
+                driver.getResult<volScalarField>()
+            );
+        } else if(driver.resultIsTyp<volTensorField>()) {
+            storeField(
+                driver.getResult<volTensorField>()
+            );
+        } else if(driver.resultIsTyp<volSymmTensorField>()) {
+            storeField(
+                driver.getResult<volSymmTensorField>()
+            );
+        } else if(driver.resultIsTyp<volSphericalTensorField>()) {
+            storeField(
+                driver.getResult<volSphericalTensorField>()
+            );
+        } else if(driver.resultIsTyp<surfaceVectorField>()) {
+            storeField(
+                driver.getResult<surfaceVectorField>()
+            );
+        } else if(driver.resultIsTyp<surfaceScalarField>()) {
+            storeField(
+                driver.getResult<surfaceScalarField>()
+            );
+        } else if(driver.resultIsTyp<surfaceTensorField>()) {
+            storeField(
+                driver.getResult<surfaceTensorField>()
+            );
+        } else if(driver.resultIsTyp<surfaceSymmTensorField>()) {
+            storeField(
+                driver.getResult<surfaceSymmTensorField>()
+            );
+        } else if(driver.resultIsTyp<surfaceSphericalTensorField>()) {
+            storeField(
+                driver.getResult<surfaceSphericalTensorField>()
+            );
+        } else if(driver.resultIsTyp<pointVectorField>()) {
+            storeField(
+                driver.getResult<pointVectorField>()
+            );
+        } else if(driver.resultIsTyp<pointScalarField>()) {
+            storeField(
+                driver.getResult<pointScalarField>()
+            );
+        } else if(driver.resultIsTyp<pointTensorField>()) {
+            storeField(
+                driver.getResult<pointTensorField>()
+            );
+        } else if(driver.resultIsTyp<pointSymmTensorField>()) {
+            storeField(
+                driver.getResult<pointSymmTensorField>()
+            );
+        } else if(driver.resultIsTyp<pointSphericalTensorField>()) {
+            storeField(
+                driver.getResult<pointSphericalTensorField>()
             );
         } else {
             WarningIn("Foam::expressionField::execute()")
-                << "Expression '" << expression_ 
-                    << "' evaluated to an unsupported type"
+                << "Expression '" << expression_
+                    << "' evaluated to an unsupported type "
+                    << driver.typ()
                     << endl;
         }
     }
+
+    driver_->tryWrite();
 }
 
 
 void Foam::expressionField::end()
 {
+    execute();
 }
 
 void Foam::expressionField::write()
@@ -147,8 +216,7 @@ void Foam::expressionField::write()
 
 void Foam::expressionField::clearData()
 {
-    scalarField_.clear();
-    vectorField_.clear();
+    field_.clear();
 }
 
 // ************************************************************************* //

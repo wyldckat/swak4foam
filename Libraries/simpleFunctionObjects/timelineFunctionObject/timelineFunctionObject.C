@@ -1,4 +1,4 @@
-//  OF-extend Revision: $Id$ 
+//  OF-extend Revision: $Id$
 /*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
@@ -42,6 +42,15 @@ namespace Foam
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
+template<>
+const char* NamedEnum<Foam::timelineFunctionObject::outputFileMode,3>::names[]=
+{
+    "foam",
+    "raw",
+    "csv"
+};
+const NamedEnum<timelineFunctionObject::outputFileMode,3> timelineFunctionObject::outputFileModeNames_;
+
 timelineFunctionObject::timelineFunctionObject
 (
     const word &name,
@@ -51,11 +60,29 @@ timelineFunctionObject::timelineFunctionObject
 :
     simpleDataFunctionObject(name,t,dict),
     factor_(
-        dict.found("factor")
-        ? readScalar(dict.lookup("factor"))
-        : 1.
+        dict.lookupOrDefault<scalar>("factor",1)
+    ),
+    outputFileMode_(
+        outputFileModeNames_[dict.lookupOrDefault<word>("outputFileMode","foam")]
     )
 {
+    switch(outputFileMode_) {
+        case ofmFoam:
+            fileExtension_="";
+            separator_=" ";
+            break;
+        case ofmRaw:
+            fileExtension_=".raw";
+            separator_=" ";
+            break;
+        case ofmCsv:
+            fileExtension_=".csv";
+            separator_=",";
+            break;
+        default:
+            fileExtension_=".unknownFileMode";
+            separator_="?";
+    }
 }
 
 
@@ -66,6 +93,14 @@ void timelineFunctionObject::flush()
     forAllIter(HashPtrTable<OFstream>, filePtrs_, iter)
     {
         (*iter()).flush();
+    }
+}
+
+void timelineFunctionObject::closeAllFiles()
+{
+    forAllIter(HashPtrTable<OFstream>, filePtrs_, iter)
+    {
+        delete filePtrs_.remove(iter);
     }
 }
 
@@ -102,18 +137,34 @@ bool timelineFunctionObject::start()
             if (!filePtrs_.found(fldName))
             {
                 fileName theDir=dataDir();
-                
-                OFstream* sPtr = new OFstream(theDir/fldName);
+
+                OFstream* sPtr = new OFstream(theDir/fldName+fileExtension_);
 
                 filePtrs_.insert(fldName, sPtr);
 
-                *sPtr<< '#' << setw(IOstream::defaultPrecision() + 6)
-                    << "Time" << token::SPACE << firstLine().c_str() << nl;
+                OFstream &s=*sPtr;
+
+                if(
+                    outputFileMode_==ofmRaw
+                    ||
+                    outputFileMode_==ofmFoam
+                ) {
+                    s << '#';
+                }
+
+                writeTime(fldName,word("Time"));
+                writeData(fldName,this->columnNames());
+
+                endData(fldName);
             }
         }
     }
 
     return true;
+}
+
+void timelineFunctionObject::endData(const word &name) {
+    (*filePtrs_[name]) << endl;
 }
 
 

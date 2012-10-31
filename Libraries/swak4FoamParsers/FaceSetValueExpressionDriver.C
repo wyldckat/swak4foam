@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,21 +28,23 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "FaceSetValueExpressionDriver.H"
+#include "FaceSetValuePluginFunction.H"
 
 #include "addToRunTimeSelectionTable.H"
 
 #include "cellSet.H"
-#include "SortableList.H"
 
 namespace Foam {
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(FaceSetValueExpressionDriver, 0);
+
+word FaceSetValueExpressionDriver::driverName_="faceSet";
 
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceSetValueExpressionDriver, dictionary, faceSet);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, FaceSetValueExpressionDriver, idName, faceSet);
@@ -96,7 +98,11 @@ FaceSetValueExpressionDriver::FaceSetValueExpressionDriver(const dictionary& dic
     SetSubsetValueExpressionDriver(dict,dict.lookup("setName"),INVALID),
     faceSet_(
         getSet<faceSet>(
-            regionMesh(dict,mesh),
+            regionMesh(
+                dict,
+                mesh,
+                searchOnDisc()
+            ),
             dict.lookup("setName"),
             origin_
         )
@@ -131,34 +137,54 @@ FaceSetValueExpressionDriver::~FaceSetValueExpressionDriver()
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<>
-inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceSet::const_iterator &it) 
+inline label SubsetValueExpressionDriver::getIndexFromIterator(const faceSet::const_iterator &it)
 {
     return it.key();
 }
 
-Field<scalar> *FaceSetValueExpressionDriver::getScalarField(const string &name)
+Field<scalar> *FaceSetValueExpressionDriver::getScalarField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceScalarField,volScalarField,faceSet,scalar>(name,faceSet_);
+    return getFieldInternalAndInterpolate<surfaceScalarField,volScalarField,faceSet,scalar>(
+        name,
+        faceSet_,
+        oldTime
+    );
 }
 
-Field<vector> *FaceSetValueExpressionDriver::getVectorField(const string &name)
+Field<vector> *FaceSetValueExpressionDriver::getVectorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceVectorField,volVectorField,faceSet,vector>(name,faceSet_);
+    return getFieldInternalAndInterpolate<surfaceVectorField,volVectorField,faceSet,vector>(
+        name,
+        faceSet_,
+        oldTime
+    );
 }
 
-Field<tensor> *FaceSetValueExpressionDriver::getTensorField(const string &name)
+Field<tensor> *FaceSetValueExpressionDriver::getTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceTensorField,volTensorField,faceSet,tensor>(name,faceSet_);
+    return getFieldInternalAndInterpolate<surfaceTensorField,volTensorField,faceSet,tensor>(
+        name,
+        faceSet_,
+        oldTime
+    );
 }
 
-Field<symmTensor> *FaceSetValueExpressionDriver::getSymmTensorField(const string &name)
+Field<symmTensor> *FaceSetValueExpressionDriver::getSymmTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceSymmTensorField,volSymmTensorField,faceSet,symmTensor>(name,faceSet_);
+    return getFieldInternalAndInterpolate<surfaceSymmTensorField,volSymmTensorField,faceSet,symmTensor>(
+        name,
+        faceSet_,
+        oldTime
+    );
 }
 
-Field<sphericalTensor> *FaceSetValueExpressionDriver::getSphericalTensorField(const string &name)
+Field<sphericalTensor> *FaceSetValueExpressionDriver::getSphericalTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternalAndInterpolate<surfaceSphericalTensorField,volSphericalTensorField,faceSet,sphericalTensor>(name,faceSet_);
+    return getFieldInternalAndInterpolate<surfaceSphericalTensorField,volSphericalTensorField,faceSet,sphericalTensor>(
+        name,
+        faceSet_,
+        oldTime
+    );
 }
 
 vectorField *FaceSetValueExpressionDriver::makePositionField()
@@ -171,7 +197,7 @@ scalarField *FaceSetValueExpressionDriver::makeCellVolumeField()
     FatalErrorIn("FaceSetValueExpressionDriver::makeCellVolumeField()")
         << "faceSet knows nothing about cells"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -202,7 +228,7 @@ scalarField *FaceSetValueExpressionDriver::makeFaceFlipField()
     );
     assert(origin!=INVALID);
 
-    SortableList<label> faceLabels(faceSet_->toc());
+    List<label> faceLabels(faceSet_->toc());
 
     forAll(faceLabels, i)
     {
@@ -241,7 +267,7 @@ scalarField *FaceSetValueExpressionDriver::makeFaceFlipField()
                         << " nei:" << mesh.faceNeighbour()[faceI]
                         << " NeiInCellSet:"
                         << cells.found(mesh.faceNeighbour()[faceI])
-                        << abort(FatalError);
+                        << exit(FatalError);
             }
         }
         else
@@ -255,10 +281,10 @@ scalarField *FaceSetValueExpressionDriver::makeFaceFlipField()
                 flip = true;
             }
         }
-    
+
         (*result)[i]= (flip ? -1 : 1 );
     }
- 
+
     return result;
 }
 
@@ -287,6 +313,26 @@ bool FaceSetValueExpressionDriver::update()
     }
 
     return true;
+}
+
+autoPtr<CommonPluginFunction> FaceSetValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        FaceSetValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool FaceSetValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return FaceSetValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

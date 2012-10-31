@@ -87,21 +87,14 @@ void patchMassFlowFunctionObject::write()
 
     if (Pstream::master())
     {
-        unsigned int w = IOstream::defaultPrecision() + 7;
-
-        OFstream& probeStream = *filePtrs_["massFlow"];
-
-        probeStream << setw(w) << phi.time().value();
-
-        forAll(vals, probeI)
-        {
-            probeStream << setw(w) << vals[probeI];
-        }
-        probeStream << nl;
+        writeTime("massFlow",phi.time().value());
+        writeData("massFlow",vals);
+        endData("massFlow");
     }
 
     if(verbose()) {
-        Info << " MassFlows: ";
+        Info<< regionString() 
+            << " MassFlows: ";
 
         forAll(patchNames_, patchI)
         {

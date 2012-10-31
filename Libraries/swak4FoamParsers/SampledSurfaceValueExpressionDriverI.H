@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,7 +28,7 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -58,26 +58,33 @@ namespace Foam {
     }
 
     template<class Type,class volField,class surfField>
-    Field<Type> *SampledSurfaceValueExpressionDriver::sampleOrInterpolateInternal(const word &name)
+    Field<Type> *SampledSurfaceValueExpressionDriver::sampleOrInterpolateInternal(
+        const word &name,
+        bool oldTime
+    )
     {
-        if(this->variables_.found(name)) {
-            return this->variables_[name].getResult<Type>(true).ptr();
+        if(this->hasVariable(name)) {
+            return this->variable(name).getResult<Type>(true).ptr();
         }
         Field<Type> *result=NULL;
 
         if(
-            this->searchInMemory() 
-            && 
+            this->searchInMemory()
+            &&
             this->mesh().foundObject<volField>(name)
         ) {
             if(interpolate_) {
                 autoPtr<interpolation<Type> > inter(
                     interpolation<Type>::New(
                         interpolationType_,
-                        this->mesh().lookupObject<volField>(name)
+                        (
+                            !oldTime ?
+                            this->mesh().lookupObject<volField>(name) :
+                            this->mesh().lookupObject<volField>(name).oldTime()
+                        )
                     )
                 );
-                
+
                 result=new Field<Type>(
                     this->theSurface_.interpolate(
                         inter()
@@ -86,21 +93,33 @@ namespace Foam {
             } else {
                 result=new Field<Type>(
                     this->theSurface_.sample(
-                        this->mesh().lookupObject<volField>(name)
+                        (
+                            !oldTime ?
+                            this->mesh().lookupObject<volField>(name) :
+                            this->mesh().lookupObject<volField>(name).oldTime()
+                        )
                     )
                 );
             }
         } else {
-            autoPtr<volField> f=this->getOrReadField<volField>(name);
+            autoPtr<volField> f=this->getOrReadField<volField>(
+                name,
+                true, // fail if not found
+                oldTime
+            );
 
             if(interpolate_) {
                 autoPtr<interpolation<Type> > inter(
                     interpolation<Type>::New(
                         interpolationType_,
-                        f()
+                        (
+                            !oldTime ?
+                            f() :
+                            f->oldTime()
+                        )
                     )
                 );
-                
+
                 result=new Field<Type>(
                     this->theSurface_.interpolate(
                         inter()
@@ -109,7 +128,11 @@ namespace Foam {
             } else {
                 result=new Field<Type>(
                     this->theSurface_.sample(
-                        f()
+                        (
+                            !oldTime ?
+                            f() :
+                            f->oldTime()
+                        )
                     )
                 );
             }
@@ -117,9 +140,9 @@ namespace Foam {
 
         if(result==NULL) {
             FatalErrorIn("SampledSurfaceValueExpressionDriver::sampleOrInterpolateInternal(const word &name)")
-                << "No valid result" 
+                << "No valid result"
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
         }
 
         return result;

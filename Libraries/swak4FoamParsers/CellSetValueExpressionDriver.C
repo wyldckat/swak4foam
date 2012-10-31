@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,10 +28,11 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "CellSetValueExpressionDriver.H"
+#include "CellSetValuePluginFunction.H"
 
 #include "addToRunTimeSelectionTable.H"
 
@@ -40,6 +41,8 @@ namespace Foam {
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(CellSetValueExpressionDriver, 0);
+
+word CellSetValueExpressionDriver::driverName_="cellSet";
 
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, CellSetValueExpressionDriver, dictionary, cellSet);
 addNamedToRunTimeSelectionTable(CommonValueExpressionDriver, CellSetValueExpressionDriver, idName, cellSet);
@@ -98,7 +101,11 @@ CellSetValueExpressionDriver::CellSetValueExpressionDriver(const dictionary& dic
     SetSubsetValueExpressionDriver(dict,dict.lookup("setName"),NEW),
     cellSet_(
         getSet<cellSet>(
-            regionMesh(dict,mesh),
+            regionMesh(
+                dict,
+                mesh,
+                searchOnDisc()
+            ),
             dict.lookup("setName"),
             origin_
         )
@@ -114,34 +121,34 @@ CellSetValueExpressionDriver::~CellSetValueExpressionDriver()
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<>
-inline label SubsetValueExpressionDriver::getIndexFromIterator(const cellSet::const_iterator &it) 
+inline label SubsetValueExpressionDriver::getIndexFromIterator(const cellSet::const_iterator &it)
 {
     return it.key();
 }
 
-Field<scalar> *CellSetValueExpressionDriver::getScalarField(const string &name)
+    Field<scalar> *CellSetValueExpressionDriver::getScalarField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volScalarField,cellSet,scalar>(name,cellSet_);
+    return getFieldInternal<volScalarField,cellSet,scalar>(name,cellSet_,oldTime);
 }
 
-Field<vector> *CellSetValueExpressionDriver::getVectorField(const string &name)
+Field<vector> *CellSetValueExpressionDriver::getVectorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volVectorField,cellSet,vector>(name,cellSet_);
+    return getFieldInternal<volVectorField,cellSet,vector>(name,cellSet_,oldTime);
 }
 
-Field<tensor> *CellSetValueExpressionDriver::getTensorField(const string &name)
+Field<tensor> *CellSetValueExpressionDriver::getTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volTensorField,cellSet,tensor>(name,cellSet_);
+    return getFieldInternal<volTensorField,cellSet,tensor>(name,cellSet_,oldTime);
 }
 
-Field<symmTensor> *CellSetValueExpressionDriver::getSymmTensorField(const string &name)
+Field<symmTensor> *CellSetValueExpressionDriver::getSymmTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volSymmTensorField,cellSet,symmTensor>(name,cellSet_);
+    return getFieldInternal<volSymmTensorField,cellSet,symmTensor>(name,cellSet_,oldTime);
 }
 
-Field<sphericalTensor> *CellSetValueExpressionDriver::getSphericalTensorField(const string &name)
+Field<sphericalTensor> *CellSetValueExpressionDriver::getSphericalTensorField(const string &name,bool oldTime)
 {
-    return getFieldInternal<volSphericalTensorField,cellSet,sphericalTensor>(name,cellSet_);
+    return getFieldInternal<volSphericalTensorField,cellSet,sphericalTensor>(name,cellSet_,oldTime);
 }
 
 vectorField *CellSetValueExpressionDriver::makePositionField()
@@ -165,7 +172,7 @@ scalarField *CellSetValueExpressionDriver::makeFaceAreaMagField()
     FatalErrorIn("CellSetValueExpressionDriver::makeFaceAreaField()")
         << "cellSet knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -174,7 +181,7 @@ scalarField *CellSetValueExpressionDriver::makeFaceFlipField()
     FatalErrorIn("CellSetValueExpressionDriver::makeFaceFlipField()")
         << "cellSet knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new scalarField(0);
 }
 
@@ -183,7 +190,7 @@ vectorField *CellSetValueExpressionDriver::makeFaceNormalField()
     FatalErrorIn("CellSetValueExpressionDriver::makeFaceNormalField()")
         << "cellSet knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new vectorField(0);
 }
 
@@ -192,18 +199,38 @@ vectorField *CellSetValueExpressionDriver::makeFaceAreaField()
     FatalErrorIn("CellSetValueExpressionDriver::makeFaceAreaField()")
         << "cellSet knows nothing about faces"
             << endl
-            << abort(FatalError);
+            << exit(FatalError);
     return new vectorField(0);
 }
 
 bool CellSetValueExpressionDriver::update()
 {
     if(debug) {
-        Pout << "CellSet: update " << cellSet_->name() 
+        Pout << "CellSet: update " << cellSet_->name()
             << endl;
     }
 
     return updateSet(cellSet_,id_,origin_);
+}
+
+autoPtr<CommonPluginFunction> CellSetValueExpressionDriver::newPluginFunction(
+    const word &name
+) {
+    return autoPtr<CommonPluginFunction>(
+        CellSetValuePluginFunction::New(
+            *this,
+            name
+        ).ptr()
+    );
+}
+
+bool CellSetValueExpressionDriver::existsPluginFunction(
+    const word &name
+) {
+    return CellSetValuePluginFunction::exists(
+        *this,
+        name
+    );
 }
 
 // ************************************************************************* //

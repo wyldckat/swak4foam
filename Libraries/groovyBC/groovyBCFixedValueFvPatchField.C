@@ -117,6 +117,13 @@ groovyBCFixedValueFvPatchField<Type>::groovyBCFixedValueFvPatchField
             << pTraits<Type>::zero
             << endl;
     }
+
+    if(this->evaluateDuringConstruction()) {
+        // make sure that this works with potentialFoam or other solvers that don't evaluate the BCs
+        this->evaluate();
+    } else {
+        // original does nothing
+    }
 }
 
 

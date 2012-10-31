@@ -81,24 +81,59 @@ void Foam::expressionToFace::combine(topoSet& set, const bool add) const
             true, // search in memory
             true  // search on disc
         );
+
+    if(dict_.valid()) {
+        driver.readVariablesAndTables(dict_());
+        driver.clearVariables();
+    }
     driver.parse(expression_);
-    if(!driver.resultIsLogical()) {
+    if(!driver.isLogical()) {
         FatalErrorIn("Foam::expressionToFace::combine(topoSet& set, const bool add) const")
             << "Expression " << expression_ << " does not evaluate to a logical expression"
                 << endl
-                << abort(FatalError);
+                << exit(FatalError);
     }
-    const volScalarField &condition=driver.getScalar();
 
-    const labelList &own=condition.mesh().faceOwner();
-    const labelList &nei=condition.mesh().faceNeighbour();
+    if(driver.resultIsTyp<volScalarField>(true)) {
+        const volScalarField &condition=driver.getResult<volScalarField>();
+        
+        const labelList &own=condition.mesh().faceOwner();
+        const labelList &nei=condition.mesh().faceNeighbour();
+        
+        Info << "    Expression " << expression_
+            << " evaluates to cellValue: using boundary" << endl;
 
-    for(label faceI=0;faceI<condition.mesh().nInternalFaces();faceI++)
-    {
-        if (condition[own[faceI]] != condition[nei[faceI]])
+        for(label faceI=0;faceI<condition.mesh().nInternalFaces();faceI++)
         {
-            addOrDelete(set, faceI, add);
+            if (condition[own[faceI]] != condition[nei[faceI]])
+            {
+                addOrDelete(set, faceI, add);
+            }
         }
+    } else if(driver.resultIsTyp<surfaceScalarField>(true)) {
+        const surfaceScalarField &condition=driver.getResult<surfaceScalarField>();
+        forAll(condition,faceI) {
+            if(condition[faceI]>0) {
+                addOrDelete(set, faceI, add);
+            }
+        }
+        forAll(condition.boundaryField(),patchI) {
+            const surfaceScalarField::PatchFieldType &patch=
+                condition.boundaryField()[patchI];
+            label start=condition.mesh().boundaryMesh()[patchI].start();
+
+            forAll(patch,i) {
+                if(patch[i]>0) {
+                    addOrDelete(set, i+start, add);
+                }
+            }
+        }
+    } else {
+        FatalErrorIn("Foam::expressionToFace::combine(topoSet& set, const bool add)")
+            << "Don't know how to handle a logical field of type "
+                << driver.typ()
+                << endl
+                << exit(FatalError);
     }
 }
 
@@ -125,7 +160,8 @@ Foam::expressionToFace::expressionToFace
 )
 :
     topoSetSource(mesh),
-    expression_(dict.lookup("expression"))
+    expression_(dict.lookup("expression")),
+    dict_(new dictionary(dict))
 {}
 
 

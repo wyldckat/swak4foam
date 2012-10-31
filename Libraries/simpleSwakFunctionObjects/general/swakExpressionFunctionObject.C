@@ -1,4 +1,4 @@
-//  OF-extend Revision: $Id$ 
+//  OF-extend Revision: $Id$
 /*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
@@ -62,8 +62,9 @@ swakExpressionFunctionObject::swakExpressionFunctionObject
             dict,
             refCast<const fvMesh>(obr_)
         )
-    ) 
+    )
 {
+    driver_->createWriterAndRead(name+"_"+type());
 }
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
@@ -78,12 +79,12 @@ wordList swakExpressionFunctionObject::fileNames()
     return wordList(1,name());
 }
 
-string swakExpressionFunctionObject::firstLine()
+stringList swakExpressionFunctionObject::columnNames()
 {
-    string result="";
+    stringList result(accumulations_.size());
 
     forAll(accumulations_,i) {
-        result+=" "+accumulations_[i];
+        result[i]=accumulations_[i];
     }
 
     return result;
@@ -95,30 +96,33 @@ void swakExpressionFunctionObject::write()
     if(verbose()) {
         Info << "Expression " << name() << " : ";
     }
-    
+
     driver_->clearVariables();
     driver_->parse(expression_);
-    word rType=driver_->getResultType();
+    word rType=driver_->CommonValueExpressionDriver::getResultType();
 
     if(rType==pTraits<scalar>::typeName) {
-        writeData<scalar>(driver_());
+        writeTheData<scalar>(driver_());
     } else if(rType==pTraits<vector>::typeName) {
-        writeData<vector>(driver_());
+        writeTheData<vector>(driver_());
     } else if(rType==pTraits<tensor>::typeName) {
-        writeData<tensor>(driver_());
+        writeTheData<tensor>(driver_());
     } else if(rType==pTraits<symmTensor>::typeName) {
-        writeData<symmTensor>(driver_());
+        writeTheData<symmTensor>(driver_());
     } else if(rType==pTraits<sphericalTensor>::typeName) {
-        writeData<sphericalTensor>(driver_());
+        writeTheData<sphericalTensor>(driver_());
     } else {
         WarningIn("swakExpressionFunctionObject::write()")
-            << "Don't know how to handle type " << rType 
+            << "Don't know how to handle type " << rType
                 << endl;
     }
-    
+
     if(verbose()) {
         Info << endl;
     }
+
+    // make sure that the stored Variables are consistently written
+    driver_->tryWrite();
 }
 
 } // namespace Foam

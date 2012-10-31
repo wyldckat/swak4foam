@@ -1,15 +1,12 @@
 default:
 	echo "Use ./Allwmake"
 
-getSimple:
-	./downloadSimpleFunctionObjects.sh
-	wcleanLnIncludeAll
-
 cleanStuff:
 	./Allwclean
 	wcleanLnIncludeAll
 
 prepareDebian:
+	cp swakConfiguration.debian swakConfiguration
 	cd debian; ./prepareForPackaging.py
 
 dpkg-only: cleanStuff prepareDebian
@@ -21,10 +18,9 @@ dpkg-only: cleanStuff prepareDebian
 source-dpkg: cleanStuff prepareDebian
 	export DH_ALWAYS_EXCLUDE=.svn:.dep:.o; dpkg-buildpackage -S -sa
 
-dpkg: getSimple dpkg-only
+dpkg: dpkg-only
 
-install:
-	./downloadSimpleFunctionObjects.sh
+globalinstall:
 	./Allwmake
 	./copySwakFilesToSite.sh
 	./removeSwakFilesFromLocal.sh

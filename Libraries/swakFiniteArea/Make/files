@@ -23,4 +23,13 @@ functionObjects/manipulateFaFieldFunctionObject.C
 functionObjects/clearExpressionFaField.C
 functionObjects/clearExpressionFaFieldFunctionObject.C
 
+pdeFunctionObjects/solvePDECommonFiniteArea.C
+pdeFunctionObjects/solveAreaLaplacianPDE.C
+pdeFunctionObjects/solveAreaLaplacianPDEFunctionObject.C
+pdeFunctionObjects/solveAreaTransportPDE.C
+pdeFunctionObjects/solveAreaTransportPDEFunctionObject.C
+
+plugins/FaPatchValuePluginFunction.C
+plugins/FaFieldValuePluginFunction.C
+
 LIB = $(FOAM_USER_LIBBIN)/libswakFiniteArea

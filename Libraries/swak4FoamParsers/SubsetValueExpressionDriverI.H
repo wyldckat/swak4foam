@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -28,7 +28,7 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -43,7 +43,11 @@ License
 namespace Foam {
 
     template<class FieldType,class Subset,class T>
-    Field<T> *SubsetValueExpressionDriver::getFieldInternal(const string &name,const Subset &sub)
+    Field<T> *SubsetValueExpressionDriver::getFieldInternal(
+        const string &name,
+        const Subset &sub,
+        bool oldTime
+    )
     {
         if(debug) {
             Pout << "SubsetValueExpressionDriver::getFieldInternal"
@@ -51,16 +55,16 @@ namespace Foam {
                 << endl;
         }
 
-        if(this->variables_.found(name)) {
+        if(this->hasVariable(name)) {
             if(debug) {
                 Pout << name << " is a variable" << endl;
             }
-            return this->variables_[name].getResult<T>(true).ptr();
+            return this->variable(name).getResult<T>(true).ptr();
         }
 
         Field<T> *result=new Field<T>(this->size());
         label cnt=0;
-        
+
         if(debug) {
             Pout << "searchInMemory: " << this->searchInMemory()
                 << " found: " << this->mesh().foundObject<FieldType>(name)
@@ -72,23 +76,43 @@ namespace Foam {
                 Pout << name << " was found in memory" << endl;
             }
             // Keep this separate to avoid copying if found in memory
-            const FieldType &f=this->mesh().lookupObject<FieldType>(name);
-            
-            forAllConstIter(typename Subset,sub,iter) {
-                (*result)[cnt]=f[getIndexFromIterator(iter)];
-                cnt++;
+            if(!oldTime) {
+                const FieldType &f=this->mesh().lookupObject<FieldType>(name);
+
+                forAllConstIter(typename Subset,sub,iter) {
+                    (*result)[cnt]=f[getIndexFromIterator(iter)];
+                    cnt++;
+                }
+            } else {
+                const FieldType &f=this->mesh().lookupObject<FieldType>(name).oldTime();
+
+                forAllConstIter(typename Subset,sub,iter) {
+                    (*result)[cnt]=f[getIndexFromIterator(iter)];
+                    cnt++;
+                }
             }
         } else {
             if(debug) {
                 Pout << name << " was found on disc" << endl;
             }
             // otherwise try disc and memory
-            autoPtr<FieldType> f=this->getOrReadField<FieldType>(name);
+            autoPtr<FieldType> f=this->getOrReadField<FieldType>(
+                name,
+                true, // fail if not found
+                oldTime
+            );
 
-            forAllConstIter(typename Subset,sub,iter) {
-                (*result)[cnt]=f()[getIndexFromIterator(iter)];
-                cnt++;
-            }            
+            if(!oldTime) {
+                forAllConstIter(typename Subset,sub,iter) {
+                    (*result)[cnt]=f()[getIndexFromIterator(iter)];
+                    cnt++;
+                }
+            } else {
+                forAllConstIter(typename Subset,sub,iter) {
+                    (*result)[cnt]=f->oldTime()[getIndexFromIterator(iter)];
+                    cnt++;
+                }
+            }
         }
         assert(cnt==this->size());
 
@@ -96,12 +120,16 @@ namespace Foam {
     }
 
     template<class FieldType,class IFieldType,class Subset,class T>
-    Field<T> *SubsetValueExpressionDriver::getFieldInternalAndInterpolate(const string &name,const Subset &sub)
+    Field<T> *SubsetValueExpressionDriver::getFieldInternalAndInterpolate(
+        const string &name,
+        const Subset &sub,
+        bool oldTime
+    )
     {
         // Yeah. I know. Code duplication without end
 
-        if(this->variables_.found(name)) {
-            return this->variables_[name].getResult<T>(true).ptr();
+        if(this->hasVariable(name)) {
+            return this->variable(name).getResult<T>(true).ptr();
         }
 
         Field<T> *result=new Field<T>(this->size());
@@ -115,26 +143,38 @@ namespace Foam {
         ) {
             const FieldType &f=this->mesh().lookupObject<FieldType>(name);
             label cnt=0;
-            
+
             forAllConstIter(typename Subset,sub,iter) {
-                (*result)[cnt]=f[getIndexFromIterator(iter)];
+                if(!oldTime) {
+                    (*result)[cnt]=f[getIndexFromIterator(iter)];
+                } else {
+                    (*result)[cnt]=f.oldTime()[getIndexFromIterator(iter)];
+                }
                 cnt++;
             }
-            
+
             assert(cnt==this->size());
 
             done=true;
         } else {
-            autoPtr<FieldType> f=this->getOrReadField<FieldType>(name,false);
+            autoPtr<FieldType> f=this->getOrReadField<FieldType>(
+                name,
+                false,
+                oldTime
+            );
             if(f.valid()) {
                 label cnt=0;
                 forAllConstIter(typename Subset,sub,iter) {
-                    (*result)[cnt]=f()[getIndexFromIterator(iter)];
+                    if(!oldTime) {
+                        (*result)[cnt]=f()[getIndexFromIterator(iter)];
+                    } else {
+                        (*result)[cnt]=f->oldTime()[getIndexFromIterator(iter)];
+                    }
                     cnt++;
-                }            
+                }
                 done=true;
             }
-        } 
+        }
 
         if(
             !done
@@ -152,7 +192,7 @@ namespace Foam {
             const labelList &own=this->mesh().faceOwner();
             const labelList &nei=this->mesh().faceNeighbour();
             const surfaceScalarField &weights=this->mesh().weights();
-                
+
             if(
                 this->searchInMemory()
                 &&
@@ -160,40 +200,72 @@ namespace Foam {
             ) {
                 const IFieldType &f=this->mesh().lookupObject<IFieldType>(name);
                 label cnt=0;
-                
+
                 forAllConstIter(typename Subset,sub,iter) {
                     label faceI=getIndexFromIterator(iter);
                     if(faceI<this->mesh().nInternalFaces()) {
-                        (*result)[cnt]=weights[faceI]*f[own[faceI]]+(1-weights[faceI])*f[nei[faceI]];
+                        if(!oldTime) {
+                            (*result)[cnt]=
+                                weights[faceI]*f[own[faceI]]
+                                +
+                                (1-weights[faceI])*f[nei[faceI]];
+                        } else {
+                            (*result)[cnt]=
+                                weights[faceI]*f.oldTime()[own[faceI]]
+                                +
+                                (1-weights[faceI])*f.oldTime()[nei[faceI]];
+                        }
                     } else {
                         // OK. We could also try to get the value from the original face
-                        (*result)[cnt]=f[own[faceI]];
+                        if(!oldTime) {
+                            (*result)[cnt]=f[own[faceI]];
+                        } else {
+                            (*result)[cnt]=f.oldTime()[own[faceI]];
+                        }
                     }
                     cnt++;
                 }
-                
+
                 assert(cnt==this->size());
 
                 done=true;
             } else {
-                autoPtr<IFieldType> f=this->getOrReadField<IFieldType>(name,false);
+                autoPtr<IFieldType> f=this->getOrReadField<IFieldType>(
+                    name,
+                    false,
+                    oldTime
+                );
 
                 if(f.valid()) {
                     label cnt=0;
-                    
+
                     forAllConstIter(typename Subset,sub,iter) {
                         label faceI=getIndexFromIterator(iter);
                         if(faceI<this->mesh().nInternalFaces()) {
-                            (*result)[cnt]=weights[faceI]*f()[own[faceI]]+(1-weights[faceI])*f()[nei[faceI]];
+                            if(!oldTime) {
+                                (*result)[cnt]=
+                                    weights[faceI]*f()[own[faceI]]
+                                    +
+                                    (1-weights[faceI])*f()[nei[faceI]];
+                            } else {
+                                (*result)[cnt]=
+                                    weights[faceI]*f->oldTime()[own[faceI]]
+                                    +
+                                    (1-weights[faceI])*f->oldTime()[nei[faceI]];
+                            }
                         } else {
                             // OK. We could also try to get the value from the original face
-                            (*result)[cnt]=f()[own[faceI]];
+                            if(!oldTime) {
+                                (*result)[cnt]=f()[own[faceI]];
+                            } else {
+                                (*result)[cnt]=f->oldTime()[own[faceI]];
+                            }
                         }
                         cnt++;
                     }
-                    
+
                     assert(cnt==this->size());
-                    
+
                     done=true;
                 }
             }
@@ -201,13 +273,14 @@ namespace Foam {
 
         if(!done) {
             FatalErrorIn("SubsetValueExpressionDriver::getFieldInternalAndInterpolate(const string &name,const Subset &sub)")
-                << "Could not find a field name " << name 
+                << "Could not find a field name " << name
                     << " of type " << pTraits<T>::typeName
-                    << " (neither " << FieldType::typeName 
+                    << " (neither " << FieldType::typeName
                     << " nor " << IFieldType::typeName << ")"
-                    << " Autointerpolate: " << this->autoInterpolate_
+                    << " autoInterpolate: " << this->autoInterpolate_
+                    << (this->autoInterpolate_ ? "" : " (try setting 'autoInterpolate' to 'true')")
                     << endl
-                    << abort(FatalError);
+                    << exit(FatalError);
         }
 
         return result;

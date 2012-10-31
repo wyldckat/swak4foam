@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -37,7 +37,7 @@ SourceFiles
     FaceSetValueExpressionDriverI.H
     FaceSetValueExpressionDriver.C
 
- ICE Revision: $Id$ 
+ ICE Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef FaceSetValueExpressionDriver_H
@@ -62,6 +62,8 @@ class FaceSetValueExpressionDriver
 :
     public SetSubsetValueExpressionDriver
 {
+    static word driverName_;
+
     // Private data
     autoPtr<faceSet> faceSet_;
 
@@ -77,6 +79,8 @@ public:
      //- Runtime type information
     TypeName("FaceSetValueExpressionDriver");
 
+    static const word &driverName() { return driverName_; }
+
    // Constructors
 
     //- Construct from components
@@ -85,15 +89,23 @@ public:
         bool autoInterpolate=false,
         bool warnAutoInterpolate=true
     );
-    
+
     //- Construct from a dictionary
     FaceSetValueExpressionDriver(const dictionary& dict,const fvMesh&mesh);
-    
+
     //- Construct from an id
     FaceSetValueExpressionDriver(const word& id,const fvMesh&mesh);
-    
+
     //- Copy construct
     FaceSetValueExpressionDriver(const faceSet &,const FaceSetValueExpressionDriver&);
+
+    autoPtr<CommonValueExpressionDriver> clone() const
+        {
+            return autoPtr<CommonValueExpressionDriver>(
+                new FaceSetValueExpressionDriver(faceSet_(),*this)
+            );
+        }
+
 
     // Destructor
 
@@ -121,15 +133,15 @@ public:
 
     virtual bool isCell() { return false; }
 
-    virtual Field<scalar> *getScalarField(const string &name);
+    virtual Field<scalar> *getScalarField(const string &name,bool oldTime=false);
 
-    virtual Field<vector> *getVectorField(const string &name);
+    virtual Field<vector> *getVectorField(const string &name,bool oldTime=false);
 
-    virtual Field<tensor> *getTensorField(const string &name);
+    virtual Field<tensor> *getTensorField(const string &name,bool oldTime=false);
 
-    virtual Field<symmTensor> *getSymmTensorField(const string &name);
+    virtual Field<symmTensor> *getSymmTensorField(const string &name,bool oldTime=false);
 
-    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name);
+    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name,bool oldTime=false);
 
     // Handling the parser
     //    void parse(const std::string& f);
@@ -145,6 +157,17 @@ public:
 
 //     template<class Type>
 //     virtual Field<Type> *toPoint(const Field<Type> &)=0;
+
+    //- return a new plugin-function
+    virtual autoPtr<CommonPluginFunction> newPluginFunction(
+        const word &name
+    );
+
+    //- tests for a plugin-function
+    virtual bool existsPluginFunction(
+        const word &name
+    );
+
 };
 
 

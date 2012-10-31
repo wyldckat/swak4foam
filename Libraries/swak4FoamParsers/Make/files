@@ -1,18 +1,24 @@
-SurfacesRepository.C
-SetsRepository.C
-GlobalVariablesRepository.C
+helpers/printSwakVersion.C
 
-ExpressionResult.C
-StoredExpressionResult.C
+repositories/SurfacesRepository.C
+repositories/SetsRepository.C
+repositories/GlobalVariablesRepository.C
 
-swakRegistryProxySurface.C
-swakRegistryProxySet.C
+ExpressionDriverWriter.C
+
+ExpressionResult/ExpressionResult.C
+ExpressionResult/StoredExpressionResult.C
+ExpressionResult/DelayedExpressionResult.C
+
+setsAndSurfaces/swakRegistryProxySurface.C
+setsAndSurfaces/swakRegistryProxySet.C
 
 FieldValueExpressionParser.yy
 PatchValueExpressionParser.yy
 SubsetValueExpressionParser.yy
 
 CommonValueExpressionDriver.C
+makeSwakDataEntry.C
 
 FieldValueExpressionLexer.ll
 FieldValueExpressionDriver.C
@@ -32,5 +38,17 @@ FaceZoneValueExpressionDriver.C
 
 SampledSurfaceValueExpressionDriver.C
 SampledSetValueExpressionDriver.C
+
+initSwakFunctionObject.C
+
+plugins/CommonPluginFunction.C
+plugins/FieldValuePluginFunction.C
+plugins/PatchValuePluginFunction.C
+plugins/CellSetValuePluginFunction.C
+plugins/CellZoneValuePluginFunction.C
+plugins/FaceSetValuePluginFunction.C
+plugins/FaceZoneValuePluginFunction.C
+plugins/SampledSetValuePluginFunction.C
+plugins/SampledSurfaceValuePluginFunction.C
 
 LIB = $(FOAM_USER_LIBBIN)/libswak4FoamParsers

@@ -1,4 +1,4 @@
-//  OF-extend Revision: $Id$ 
+//  OF-extend Revision: $Id$
 /*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
@@ -53,6 +53,11 @@ simpleFunctionObject::simpleFunctionObject
         ? readBool(dict.lookup("verbose"))
         : false
     ),
+    writeDebug_(
+        dict.found("writeDebug")
+        ? readBool(dict.lookup("writeDebug"))
+        : false
+    ),
     after_(
         dict.found("after")
         ? readScalar(dict.lookup("after"))
@@ -67,12 +72,17 @@ simpleFunctionObject::simpleFunctionObject
     time_(t),
     dict_(dict),
     regionName_(
-        dict_.found("region") 
-        ? dict_.lookup("region") 
+        dict_.found("region")
+        ? dict_.lookup("region")
         : polyMesh::defaultRegion
     ),
     obr_(time_.lookupObject<objectRegistry>(regionName_))
 {
+    if(regionName_==polyMesh::defaultRegion) {
+        regionString_ = "";
+    } else {
+        regionString_ = " Region: "+regionName_+" :";
+    }
 }
 
 
@@ -81,7 +91,7 @@ simpleFunctionObject::simpleFunctionObject
 bool simpleFunctionObject::start()
 {
     timeSteps_=outputInterval_;
-    
+
     return true;
 }
 
@@ -100,18 +110,30 @@ bool simpleFunctionObject::outputTime(const bool forceWrite)
 
 bool simpleFunctionObject::execute(const bool forceWrite)
 {
+    if(debug) {
+        Info << name() << "::execute() - Entering" << endl;
+    }
     if(time_.time().value()<after_) {
+        if(debug) {
+            Info << name() << "::execute() - Leaving - after" << endl;
+        }
         return true;
     }
 
     timeSteps_++;
 
     if(this->outputTime(forceWrite)) {
+        if(debug) {
+            Info << name() << "::execute() - outputTime" << endl;
+        }
         timeSteps_=0;
         write();
         flush();
     }
 
+    if(debug) {
+        Info << name() << "::execute() - Leaving" << endl;
+    }
     return true;
 }
 
