@@ -1306,7 +1306,7 @@ void CommonValueExpressionDriver::prepareData(dictionary &dict) const
     }
 }
 
-class lessOp {
+class littlerOp {
 public:
     bool operator()(scalar a,scalar b) {
         return a<b;
@@ -1371,7 +1371,7 @@ vector CommonValueExpressionDriver::getPositionOfMinimum(
     const vectorField &locs
 ) const
 {
-    return getExtremePosition(lessOp(),vals,locs);
+    return getExtremePosition(littlerOp(),vals,locs);
 }
 
 vector CommonValueExpressionDriver::getPositionOfMaximum(
