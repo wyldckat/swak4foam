@@ -285,14 +285,16 @@ hide circle
      an overview of the components of the various types
      #+CAPTION: Component names for the data types
      #+LABEL: tab:components
-     | Data type          | Components                 |
-     |--------------------+----------------------------|
-     | Vector             | x y z                      |
-     | Tensor             | xx xy xz yx yy yz zx zy zz |
-     | Symmetrical tensor | xx xy xz yy yz zz          |
-     | Spherical tensor   | ii                         |
+     | Data type          | Components                       |
+     |--------------------+----------------------------------|
+     | Vector             | x y z                            |
+     | Tensor             | xx xy xz yx yy yz zx zy zz x y z |
+     | Symmetrical tensor | xx xy xz yy yz zz                |
+     | Spherical tensor   | ii                               |
      For the tensor types there is also the "component" =T= that
      transposes the tensor (=A.T= gives the transposed tensor for =A=)
+
+     =x=, =y= and =z= for tensors are the rows as vectors.
 *** Mathematical functions available in all parsers
     The mathematical functions described in the /Programmers Guide/
     are implemented in all parsers:
@@ -322,11 +324,19 @@ hide circle
     - diag :: returns a vector with the diagonal elements
     - tr :: Trace of the tensor
     - dev :: Deviatoric component
+    - dev2 :: Deviatoric component times two
     - symm :: Symmetric component
+    - twoSymm :: Symmetric component times two
     - skew :: Skew-symmetric component
     - det :: Determinant
     - cof :: Cofactors
     - inv :: Inverse
+    - sph :: Spherical part of a tensor
+    - eigenValues :: Return a vector with the eigenvalues of the
+                     tensor. Sorted by ascending magnitude
+    - eigenVectors :: Return a tensor with the eigenvectors of the tensor
+                      in the rows. Sorted by ascending magnitude
+                      of the eigenvalue
     These functions examine the whole fields (in parallel over all
     processors) and return a field which has one value anywhere:
     - max(x) :: maximum of the field (for types with multiple components
@@ -463,7 +473,7 @@ hide circle
      secondary structure of a parser
      - interpolate(cellExpr) :: Interpolates to the faces (F, FF)
      - interpolateToPoint(cellExpr) :: Interpolates to points (F)
-     - interpolateToCell(faceExpr) :: Interpolates to the cells (F)
+     - interpolateToCell(pointExpr) :: Interpolates to the cells (F)
      - toPoint(faceExpr) :: To the point values (P, S, FP)
      - toFace(pointExpr) :: To the cell values (P, S, FP)
      These functions are not strictly interpolations, but are used to
@@ -665,6 +675,13 @@ hide circle
     - traceParsing :: Makes the machine-generated (by =bison=)
                       parser-code output debugging information. Type:
                       Boolean. Default: =false=
+    This option allows switching of warnings that point to a probable
+    problem:
+    - variableNameIdenticalToField :: if a variable is set to a name
+         that is identical to the name of a that is already present in
+         the current mesh then a warning is issued because this
+         usually indicates a mix-up. If this option is set to =true=
+         then no warning is given. Default: =false=
     These settings change the behavior of where fields are looked for
     by the parser. They may be overridden by the using application
     (for instance for =groovyBC= searching files on disk is
@@ -884,7 +901,37 @@ hide circle
                       should work on
      - setName :: name of the sampled set to work with
      Adding sets and surfaces to the repositories can be done with
-     appropriate function objects
+     appropriate function objects. If no surface with the name given
+     by =surfaceName= is present then the specification of the
+     surface is looked for:
+     - surface :: a sub-dictionary with the specification of the
+                  sampled surface (for details see the
+                  OpenFOAM-documentation). This surface is added to the
+                  repository under the name =surfaceName=
+
+     A missing set =setName= is treated in the same way: The
+     specification is looked for
+     - set :: Specification of the sampled set
+
+     For sampled surfaces two optional entries exist:
+     - writeSurfaceOnConstruction :: if set to =true= the surface
+          will be written when it is constructed at the current time
+          in a subfolder =surfaceRepository=
+     - autoWriteSurface :: if set to =true= the surface is written at
+          every write-time in a subfolder =surfaceRepository=
+     If one of the above options is set then the following option has
+     to be set:
+     - surfaceFormat :: format in which the surface should be written
+
+     Similar optional entries exist for sampled sets:
+     - writeSetOnConstruction :: if set to =true= the set
+          will be written when it is constructed at the current time
+          in a subfolder =setRepository=
+     - autoWriteSet :: if set to =true= the set is written at
+          every write-time in a subfolder =setRepository=
+     If one of the above options is set then the following option has
+     to be set:
+     - setFormat :: format in which the set should be written
 **** Additional parameters for the finite area (FAM) drivers
      The =faInternalField= driver adds the same parameter as the
      field-driver:

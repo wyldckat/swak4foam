@@ -1,5 +1,5 @@
 # -*- mode: org -*-
-#+TITLE: =README= for =swak4Foam= - Version for OpenFOAM 1.x
+#+TITLE: =README= for =swak4Foam= - Version for OpenFOAM 2.x
 * Description
   A collection of libraries and tools that let the user handle
   OpenFOAM-data based on expressions
@@ -53,7 +53,7 @@
    See: http://openfoamwiki.net/index.php/contrib/swak4Foam
 * Installation/Compilation
 ** Requirements
-   - Version 2.0 or 2.1 of OpenFOAM (a version that works with 1.6,
+   - Version 2.0, 2.1 or 2.2 of OpenFOAM (a version that works with 1.6,
      1.6-ext and 1.7 is available separately)
      - The =finiteArea=-stuff will probably work with version 2.0-ext
        (once that is available)
@@ -1870,3 +1870,45 @@ S_{expl} + S_{impl} T
 **** Start of the reference-manual
      A first version of a reference manual is added. Only the first
      part about expressions and parameters is written.
+** 2013-03-18 - version number : 0.2.3
+*** Supports OpenFOAM 2.2
+    This is the first version to compile with OpenFOAM 2.2
+
+    Due to changes in OpenFOAM it requires several =#ifdef= (something
+    that is usually avoided in the OpenFOAM-world) and other
+    prepocessor definitions)
+*** Incompatibilities to previous versions
+**** =simpleFunctionObjects= and =simpleLagrangianFunctionObjects= no longer independent from rest
+     Due to incompatibilities between OpenFOAM 2.2 and previous
+     versions there are compatibility headers included from the rest
+     of swak4Foam.
+
+     Theoretically both libraries can be easily made independent again.
+*** Bug fixes
+**** Compiles on =1.6-ext= again
+     The last release (0.2.2) did not compile on =1.6-ext=. This is
+     fixed
+**** Missing field files for the OSCFD2012-cases
+     Due to a stupid =.hgignore= the =0.orig=-directories were
+     missing. Nobody complained though
+**** Did not compile on =2.0.x=
+     This has been fixed
+*** New features
+**** Writing of sampled surfaces and sampled sets
+     With the options =autoWriteSurface= and =autoWriteSets= sampled
+     surfaces and sets are automatically written at each write
+     time. With =writeSurfaceOnConstruction= and
+     =writeSetOnConstruction= both are written when they are
+     created. A format has to be specified. No values are written.
+*** Enhancements
+**** Parsers now support =eigenValues= and =eigenVectors=
+     These function and some other minor ones (=sph=, =dev2=,
+     =twoSymm=) are now supported by the parsers
+**** Extract rows from tensors with component operator
+     The component operators =.x=, =.y= and =.z= now extract the rows
+     from a tensor
+**** Variable names that are identical to fields trigger a Warning
+     As this situation (like a variable named =p= for the position
+     that shadows the pressure field =p=) leads to weird errors a
+     warning is given. The warning can be switched of with the option
+     =variableNameIdenticalToField=.

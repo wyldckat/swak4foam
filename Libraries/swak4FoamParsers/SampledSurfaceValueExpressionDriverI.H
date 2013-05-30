@@ -67,7 +67,11 @@ namespace Foam {
         bool oldTime
     )
     {
-        if(this->hasVariable(name)) {
+        if(
+            this->hasVariable(name)
+            &&
+            this->variable(name).valueType()==pTraits<Type>::typeName
+        ) {
             return this->variable(name).getResult<Type>(true);
         }
         autoPtr<Field<Type> > result;
@@ -155,6 +159,15 @@ namespace Foam {
                 << "No valid result"
                     << endl
                     << exit(FatalError);
+        }
+
+        if(debug) {
+            Pout << "SampledSurfaceValueExpressionDriver::sampleOrInterpolateInternal()"
+                << "Type: " << pTraits<Type>::typeName
+                << " name: " << name
+                << " size: " << this->size() << " result: "
+                << result().size()
+                << endl;
         }
 
         return tmp<Field<Type> >(result.ptr());

@@ -38,8 +38,8 @@ Contributors/Copyright:
 #include "FieldValueExpressionDriver.H"
 
 #include "HashPtrTable.H"
-#include "basicPsiThermo.H"
-#include "basicRhoThermo.H"
+
+#include "swakThermoTypes.H"
 
 #include "addToRunTimeSelectionTable.H"
 
@@ -197,8 +197,10 @@ public:
     ) {}
 
     void doEvaluation() {
-        const volScalarField T4 = pow4(
-            mesh().lookupObject<volScalarField>("T")
+        const volScalarField T4(
+            pow4(
+                mesh().lookupObject<volScalarField>("T")
+            )
         );
 
         autoPtr<volScalarField> val(

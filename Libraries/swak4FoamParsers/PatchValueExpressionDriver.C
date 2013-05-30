@@ -48,7 +48,7 @@ Contributors/Copyright:
 
 #include <nearWallDist.H>
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
 #include "directMappedFvPatch.H"
 
 #include "mapDistribute.H"
@@ -540,11 +540,13 @@ autoPtr<ExpressionResult> PatchValueExpressionDriver::getRemoteResult(
         return CommonValueExpressionDriver::getRemoteResult(otherDriver);
     }
 
-    const mappedPolyPatch &patch=dynamicCast<const mappedPolyPatch&>(
+    //    const mappedPolyPatch &patch=dynamicCast<const mappedPolyPatch&>(
+    const mappedPolyPatch &patch=dynamic_cast<const mappedPolyPatch&>(
         patch_.patch()
     );
     PatchValueExpressionDriver &driver=
-        dynamicCast<PatchValueExpressionDriver&>(otherDriver);
+        //        dynamicCast<PatchValueExpressionDriver&>(otherDriver);
+        dynamic_cast<PatchValueExpressionDriver&>(otherDriver);
 
     if(
         patch.mode()!=mappedPatchBase::NEARESTPATCHFACE

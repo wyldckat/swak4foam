@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -30,7 +30,7 @@ License
 Contributors/Copyright:
     2012-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
 
- SWAK Revision: $Id$ 
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "swakRegistryProxySet.H"
@@ -56,14 +56,16 @@ namespace Foam
 // {
 //     if (debug)
 //     {
-//         Pout<< "swakRegistryProxySet::createGeometry() - doing nothing" 
+//         Pout<< "swakRegistryProxySet::createGeometry() - doing nothing"
 //             << endl;
 //     }
 // }
 
 Foam::sampledSet &Foam::swakRegistryProxySet::realSet()
 {
-    return SetsRepository::getRepository().getSet(
+    return SetsRepository::getRepository(
+        mesh()
+    ).getSet(
         setName_,
         static_cast<const fvMesh&>(mesh())
     );
@@ -71,7 +73,9 @@ Foam::sampledSet &Foam::swakRegistryProxySet::realSet()
 
 const Foam::sampledSet &Foam::swakRegistryProxySet::realSet() const
 {
-    return SetsRepository::getRepository().getSet(
+    return SetsRepository::getRepository(
+        mesh()
+    ).getSet(
         setName_,
         static_cast<const fvMesh&>(mesh())
     );
@@ -84,13 +88,17 @@ Foam::swakRegistryProxySet::swakRegistryProxySet
 (
     const word& name,
     const polyMesh& mesh,
+#ifdef FOAM_MESHSEARCH_CONST_SAMPLEDSET
+    const meshSearch& search,
+#else
     meshSearch& search,
+#endif
     const dictionary& dict
 )
 :
     sampledSet(
-        name, 
-        mesh, 
+        name,
+        mesh,
         search,
         dict
     ),
@@ -101,7 +109,7 @@ Foam::swakRegistryProxySet::swakRegistryProxySet
         realSet().cells(),
         realSet().faces(),
         realSet().segments(),
-        realSet().curveDist()        
+        realSet().curveDist()
     );
 }
 

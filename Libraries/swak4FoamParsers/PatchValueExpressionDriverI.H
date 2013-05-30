@@ -41,7 +41,7 @@ Contributors/Copyright:
 #include "pointPatchField.H"
 #include "primitivePatchInterpolation.H"
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
 #include "directMappedPatchBase.H"
 #include "interpolationCell.H"
 
@@ -72,12 +72,16 @@ namespace Foam {
             autoPtr<Field<Type> >vals;
             bool isPoint=false;
 
-            if(hasVariable(name)) {
+            if(
+                hasVariable(name)
+                &&
+                variable(name).valueType()==pTraits<Type>::typeName
+            ) {
                 isPoint=variable(name).isPoint();
                 vals.set(
                     variable(name).getResult<Type>(true).ptr()
                 );
-            } else if(isGlobal<Type>(name,false)) {
+            } if(isGlobal<Type>(name,false)) {
                 vals.set(
                     const_cast<ExpressionResult &>(
                         lookupGlobal(name)
@@ -292,7 +296,11 @@ namespace Foam {
         typedef GeometricField<Type,fvPatchField,volMesh> localVolField;
         typedef GeometricField<Type,pointPatchField,pointMesh> localPointField;
 
-        if(hasVariable(name)) {
+        if(
+            hasVariable(name)
+            &&
+            variable(name).valueType()==pTraits<Type>::typeName
+        ) {
             return variable(name).getResult<Type>(true);
         }
 
@@ -340,7 +348,11 @@ namespace Foam {
     {
         typedef GeometricField<Type,fvPatchField,volMesh> localVolField;
 
-        if(hasVariable(name)) {
+        if(
+            hasVariable(name)
+            &&
+            variable(name).valueType()==pTraits<Type>::typeName
+        ) {
             return variable(name).getResult<Type>(true);
         }
 
@@ -572,7 +584,7 @@ namespace Foam {
 
                 if (interpolationScheme != interpolationCell<T>::typeName)
                 {
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
                     notImplemented(
                         "Interpolation scheme "+interpolationScheme
                         +" in version 1.x of OpenFOAM"
@@ -615,7 +627,7 @@ namespace Foam {
                     newValues = lookupMesh.lookupObject<localVolField>(name);
                 }
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
                 mapDistribute::distribute
                             (
                                 Pstream::defaultCommsType,
@@ -633,7 +645,7 @@ namespace Foam {
             }
 
             case mappedPatchBase::NEARESTPATCHFACE:
-#if FOAM_VERSION4SWAK_MAJOR>=2 && FOAM_VERSION4SWAK_MINOR>=1
+#ifdef FOAM_HAS_ABI_PATCHES
             case mappedPatchBase::NEARESTPATCHFACEAMI:
 #endif
             {
@@ -669,7 +681,7 @@ namespace Foam {
                     }
                 }
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
                 const mapDistribute& distMap = mpp.map();
                 mapDistribute::distribute
                             (
@@ -730,7 +742,7 @@ namespace Foam {
                     }
                 }
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
                 mapDistribute::distribute
                             (
                                 Pstream::defaultCommsType,
@@ -785,7 +797,7 @@ namespace Foam {
 
         if(
             mpp.mode()!=mappedPatchBase::NEARESTPATCHFACE
-#if FOAM_VERSION4SWAK_MAJOR>=2 && FOAM_VERSION4SWAK_MINOR>=1
+#ifdef FOAM_HAS_ABI_PATCHES
             &&
             mpp.mode()!=mappedPatchBase::NEARESTPATCHFACEAMI
 #endif
@@ -819,7 +831,7 @@ namespace Foam {
                     << abort(FatalError);
         }
 
-#if FOAM_VERSION4SWAK_MAJOR<2
+#ifdef FOAM_MAPPED_IS_DIRECTMAPPED
         const mapDistribute& distMap = mpp.map();
         mapDistribute::distribute
         (
