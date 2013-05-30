@@ -28,7 +28,10 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2011-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -60,7 +63,8 @@ namespace Foam {
     }
 
     template<class Type,class volField,class surfField>
-    Field<Type> *SampledSetValueExpressionDriver::sampleOrInterpolateInternal(
+    tmp<Field<Type> >
+    SampledSetValueExpressionDriver::sampleOrInterpolateInternal(
         const word &name,
         bool oldTime
     )
@@ -76,10 +80,10 @@ namespace Foam {
                 << endl;
         }
         if(this->hasVariable(name)) {
-            return this->variable(name).getResult<Type>(true).ptr();
+            return this->variable(name).getResult<Type>(true);
         }
 
-        Field<Type> *result=NULL;
+        autoPtr<Field<Type> > result;
         const sampledSet& samples = this->theSet_;
 
         if(
@@ -99,8 +103,10 @@ namespace Foam {
                     )
                 );
 
-                result=new Field<Type>(this->theSet_.size());
-                Field<Type> &values=*result;
+                result.set(
+                    new Field<Type>(this->theSet_.size())
+                );
+                Field<Type> &values=result();
 
                 forAll(samples, samplei)
                 {
@@ -119,8 +125,10 @@ namespace Foam {
                     Pout << "Interpolated values: " << values << endl;
                 }
             } else {
-                result=new Field<Type>(this->theSet_.size());
-                Field<Type> &values=*result;
+                result.set(
+                    new Field<Type>(this->theSet_.size())
+                );
+                Field<Type> &values=result();
                 const volField &field=this->mesh().lookupObject<volField>(name);
 
                 forAll(samples, samplei)
@@ -154,8 +162,10 @@ namespace Foam {
                     )
                 );
 
-                result=new Field<Type>(this->theSet_.size());
-                Field<Type> &values=*result;
+                result.set(
+                    new Field<Type>(this->theSet_.size())
+                );
+                Field<Type> &values=result();
 
                 forAll(samples, samplei)
                 {
@@ -171,8 +181,10 @@ namespace Foam {
                         );
                 }
             } else {
-                result=new Field<Type>(this->theSet_.size());
-                Field<Type> &values=*result;
+                result.set(
+                    new Field<Type>(this->theSet_.size())
+                );
+                Field<Type> &values=result();
                 const volField &field=f();
 
                 forAll(samples, samplei)
@@ -180,20 +192,23 @@ namespace Foam {
                     if(!oldTime) {
                         values[samplei] = field[samples.cells()[samplei]];
                     } else {
-                        values[samplei] = field.oldTime()[samples.cells()[samplei]];
+                        values[samplei] =
+                            field.oldTime()[samples.cells()[samplei]];
                     }
                 }
             }
         }
 
-        if(result==NULL) {
+        if(!result.valid()) {
             FatalErrorIn("SampledSetValueExpressionDriver::sampleOrInterpolateInternal(const word &name)")
                 << "No valid result"
                     << endl
                     << exit(FatalError);
         }
 
-        return result;
+        return tmp<Field<Type> >(
+            result.ptr()
+        );
     }
 
 }

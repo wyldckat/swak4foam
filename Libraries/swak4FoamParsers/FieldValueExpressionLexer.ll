@@ -1,4 +1,34 @@
+/*----------------------- -*- C++ -*- ---------------------------------------*\
+ ##   ####  ######     |
+ ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
+ ##  ##     ####       |
+ ##  ##     ##         | http://www.ice-sf.at
+ ##   ####  ######     |
+-------------------------------------------------------------------------------
+License
+    This file is part of swak4Foam.
 
+    swak4Foam is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    swak4Foam is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with swak4Foam.  If not, see <http://www.gnu.org/licenses/>.
+
+Description
+
+
+Contributors/Copyright:
+    2006-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id:  $
+\*---------------------------------------------------------------------------*/
 %{                                          /* -*- C++ -*- */
 #include "FieldValueExpressionDriverYY.H"
 #include <errno.h>
@@ -18,6 +48,7 @@ typedef parserField::FieldValueExpressionParser::semantic_type YYSTYPE;
 %s tensorcomponent
 %x parsedByOtherParser
 %x needsIntegerParameter
+%x otherMeshField
 
 %option noyywrap nounput batch debug
 %option stack
@@ -58,13 +89,13 @@ float                      ((({fractional_constant}{exponent_part}?)|([[:digit:]
     }
 %}
 
-<INITIAL,setname,zonename,fsetname,fzonename,psetname,pzonename,patchname,needsIntegerParameter>[ \t]+             yylloc->step ();
+<INITIAL,setname,zonename,fsetname,fzonename,psetname,pzonename,patchname,needsIntegerParameter,otherMeshField>[ \t]+             yylloc->step ();
 [\n]+                yylloc->lines (yyleng); yylloc->step ();
 
 <INITIAL,setname,zonename,fsetname,fzonename,psetname,pzonename,patchname>[-+*/%(),&^<>!?:.]               return yytext[0];
 
-<needsIntegerParameter>[(] return yytext[0];
-<needsIntegerParameter>[)] { BEGIN(INITIAL); return yytext[0]; }
+<needsIntegerParameter,otherMeshField>[(] return yytext[0];
+<needsIntegerParameter,otherMeshField>[)] { BEGIN(INITIAL); return yytext[0]; }
 
 &&                   return token::TOKEN_AND;
 \|\|                 return token::TOKEN_OR;
@@ -239,12 +270,103 @@ false                  return token::TOKEN_FALSE;
                        return token::TOKEN_INT;
                      }
 
+<otherMeshField>{id} {
+    Foam::word *ptr=new Foam::word (yytext);
+    if(
+        driver.isForeignField<Foam::volScalarField>(
+            driver.otherMeshName(),
+            *ptr
+        )
+    ) {
+        yylval->name = ptr; return token::TOKEN_OTHER_MESH_SID;
+    } else if(
+        driver.isForeignField<Foam::volVectorField>(
+            driver.otherMeshName(),
+            *ptr
+        )
+    ) {
+        yylval->name = ptr; return token::TOKEN_OTHER_MESH_VID;
+    } else if(
+        driver.isForeignField<Foam::volTensorField>(
+            driver.otherMeshName(),
+            *ptr
+        )
+    ) {
+        yylval->name = ptr; return token::TOKEN_OTHER_MESH_TID;
+    } else if(
+        driver.isForeignField<Foam::volSymmTensorField>(
+            driver.otherMeshName(),
+            *ptr
+        )
+    ) {
+        yylval->name = ptr; return token::TOKEN_OTHER_MESH_YID;
+    } else if(
+        driver.isForeignField<Foam::volSphericalTensorField>(
+            driver.otherMeshName(),
+            *ptr
+        )
+    ) {
+        yylval->name = ptr; return token::TOKEN_OTHER_MESH_HID;
+    } else {
+        driver.error(
+            *yylloc,
+            "Foreign mesh "+driver.otherMeshName()
+            +" does not have a field named "+(*ptr)
+        );
+    }
+                     }
 <INITIAL>{id}                 {
-    Foam::string *ptr=new Foam::string (yytext);
-    if(driver.isLine(*ptr)) {
+    Foam::word *ptr=new Foam::word (yytext);
+
+    if(Foam::MeshesRepository::getRepository().hasMesh(*ptr)) {
+        BEGIN(otherMeshField);
+        driver.otherMeshName()=(*ptr);
+        yylval->name=ptr;
+        return token::TOKEN_OTHER_MESH_ID;
+    } else if(driver.isLine(*ptr)) {
         yylval->name = ptr; return token::TOKEN_LINE;
     } else if(driver.isLookup(*ptr)) {
         yylval->name = ptr; return token::TOKEN_LOOKUP;
+    } else if(
+        driver.isVariable<Foam::surfaceScalarField::value_type>(*ptr,false,driver.mesh().nInternalFaces())
+    ) {
+        yylval->name = ptr; return token::TOKEN_FSID;
+    } else if(
+        driver.isVariable<Foam::pointScalarField::value_type>(*ptr,true)
+    ) {
+        yylval->name = ptr; return token::TOKEN_PSID;
+    } else if(
+        driver.isVariable<Foam::surfaceVectorField::value_type>(*ptr,false,driver.mesh().nInternalFaces())
+    ) {
+        yylval->name = ptr; return token::TOKEN_FVID;
+    } else if(
+        driver.isVariable<Foam::pointVectorField::value_type>(*ptr,true)
+    ) {
+        yylval->name = ptr; return token::TOKEN_PVID;
+    } else if(
+        driver.isVariable<Foam::surfaceTensorField::value_type>(*ptr,false,driver.mesh().nInternalFaces())
+    ) {
+        yylval->name = ptr; return token::TOKEN_FTID;
+    } else if(
+        driver.isVariable<Foam::pointTensorField::value_type>(*ptr,true)
+    ) {
+        yylval->name = ptr; return token::TOKEN_PTID;
+    } else if(
+        driver.isVariable<Foam::surfaceSymmTensorField::value_type>(*ptr,false,driver.mesh().nInternalFaces())
+    ) {
+        yylval->name = ptr; return token::TOKEN_FYID;
+    } else if(
+        driver.isVariable<Foam::pointSymmTensorField::value_type>(*ptr,true)
+    ) {
+        yylval->name = ptr; return token::TOKEN_PYID;
+    } else if(
+        driver.isVariable<Foam::surfaceSphericalTensorField::value_type>(*ptr,false,driver.mesh().nInternalFaces())
+    ) {
+        yylval->name = ptr; return token::TOKEN_FHID;
+    } else if(
+        driver.isVariable<Foam::pointSphericalTensorField::value_type>(*ptr,true)
+    ) {
+        yylval->name = ptr; return token::TOKEN_PHID;
     } else if(
         driver.isVariable<Foam::volScalarField::value_type>(*ptr)
         ||
@@ -364,7 +486,7 @@ false                  return token::TOKEN_FALSE;
                      }
 
 <setname>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isCellSet(*ptr)) {
         yylval->name = ptr; return token::TOKEN_SETID;
@@ -373,7 +495,7 @@ false                  return token::TOKEN_FALSE;
     }
                      }
 <zonename>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isCellZone(*ptr)) {
         yylval->name = ptr; return token::TOKEN_ZONEID;
@@ -382,7 +504,7 @@ false                  return token::TOKEN_FALSE;
     }
                      }
 <fsetname>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isFaceSet(*ptr)) {
         yylval->name = ptr; return token::TOKEN_FSETID;
@@ -391,7 +513,7 @@ false                  return token::TOKEN_FALSE;
     }
                      }
 <fzonename>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isFaceZone(*ptr)) {
         yylval->name = ptr; return token::TOKEN_FZONEID;
@@ -401,7 +523,7 @@ false                  return token::TOKEN_FALSE;
                      }
 
 <psetname>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isPointSet(*ptr)) {
         yylval->name = ptr; return token::TOKEN_PSETID;
@@ -410,7 +532,7 @@ false                  return token::TOKEN_FALSE;
     }
                      }
 <pzonename>{setid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     if(driver.isPointZone(*ptr)) {
         yylval->name = ptr; return token::TOKEN_PZONEID;
@@ -420,7 +542,7 @@ false                  return token::TOKEN_FALSE;
                      }
 
 <patchname>{patchid}              {
-    Foam::string *ptr=new Foam::string (yytext);
+    Foam::word *ptr=new Foam::word (yytext);
     BEGIN(INITIAL);
     Foam::label patchI=driver.mesh().boundaryMesh().findPatchID(*ptr);
     if(patchI>=0) {

@@ -37,7 +37,10 @@ SourceFiles
     CellSetValueExpressionDriverI.H
     CellSetValueExpressionDriver.C
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2010-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef CellSetValueExpressionDriver_H
@@ -76,6 +79,14 @@ protected:
     //- update stuff that needs updating
     virtual bool update();
 
+    //- weights of the entries if it is not a point field
+
+    //- parametert size is the expected size of the weight field and
+    //- will be used to determine whether this is correct.
+    virtual tmp<scalarField> weightsNonPoint(
+        label size
+    ) const;
+
 public:
 
      //- Runtime type information
@@ -96,7 +107,10 @@ public:
     CellSetValueExpressionDriver(const word& id,const fvMesh&mesh);
 
     //- Copy construct
-    CellSetValueExpressionDriver(const cellSet &,const CellSetValueExpressionDriver&);
+    CellSetValueExpressionDriver(
+        const cellSet &,
+        const CellSetValueExpressionDriver&
+    );
 
     autoPtr<CommonValueExpressionDriver> clone() const
         {
@@ -112,34 +126,49 @@ public:
 
     // Member Functions
 
-    virtual vectorField *makePositionField();
+    virtual tmp<vectorField> makePositionField() const;
 
-    virtual scalarField *makeFaceAreaMagField();
+    virtual tmp<scalarField> makeFaceAreaMagField() const;
 
-    virtual scalarField *makeCellVolumeField();
+    virtual tmp<scalarField> makeCellVolumeField() const;
 
-    //     virtual vectorField *makePointField()=0;
+    //     virtual tmp<vectorField> makePointField()=0;
 
-    virtual scalarField *makeFaceFlipField();
+    virtual tmp<scalarField> makeFaceFlipField() const;
 
-    virtual vectorField *makeFaceNormalField();
+    virtual tmp<vectorField> makeFaceNormalField() const;
 
-    virtual vectorField *makeFaceAreaField();
+    virtual tmp<vectorField> makeFaceAreaField() const;
 
 //     template<class Type>
 //     Field<Type> *getField(const string &name);
 
     virtual bool isCell() { return true; }
 
-    virtual Field<scalar> *getScalarField(const string &name,bool oldTime=false);
+    virtual tmp<Field<scalar> > getScalarField(
+        const string &name,
+        bool oldTime=false
+    );
 
-    virtual Field<vector> *getVectorField(const string &name,bool oldTime=false);
+    virtual tmp<Field<vector> > getVectorField(
+        const string &name,
+        bool oldTime=false
+    );
 
-    virtual Field<tensor> *getTensorField(const string &name,bool oldTime=false);
+    virtual tmp<Field<tensor> > getTensorField(
+        const string &name,
+        bool oldTime=false
+    );
 
-    virtual Field<symmTensor> *getSymmTensorField(const string &name,bool oldTime=false);
+    virtual tmp<Field<symmTensor> > getSymmTensorField(
+        const string &name,
+        bool oldTime=false
+    );
 
-    virtual Field<sphericalTensor> *getSphericalTensorField(const string &name,bool oldTime=false);
+    virtual tmp<Field<sphericalTensor> > getSphericalTensorField(
+        const string &name,
+        bool oldTime=false
+    );
 
     // Handling the parser
     //    void parse(const std::string& f);

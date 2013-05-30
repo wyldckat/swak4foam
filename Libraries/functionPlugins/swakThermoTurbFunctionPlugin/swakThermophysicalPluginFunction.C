@@ -28,7 +28,10 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2012-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "swakThermophysicalPluginFunction.H"
@@ -115,11 +118,7 @@ const basicThermo &swakThermophysicalPluginFunction::thermoInternal(
                 usePsi=false;
             } else if(debug) {
                 Info << "No " << thermoTypeName << " in basicRhoThermo-types "
-#ifdef FOAM_HAS_SORTED_TOC
                     << basicRhoThermo::fvMeshConstructorTablePtr_->sortedToc()
-#else
-                    << basicRhoThermo::fvMeshConstructorTablePtr_->toc()
-#endif
                     << endl;
             }
             if(usePsi) {
@@ -134,11 +133,7 @@ const basicThermo &swakThermophysicalPluginFunction::thermoInternal(
                     }
                 } else if(debug) {
                     Info << "No " << thermoTypeName << " in basicPsiThermo-types "
-#ifdef FOAM_HAS_SORTED_TOC
                     << basicPsiThermo::fvMeshConstructorTablePtr_->sortedToc()
-#else
-                    << basicPsiThermo::fvMeshConstructorTablePtr_->toc()
-#endif
                         << endl;
                 }
             }

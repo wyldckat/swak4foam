@@ -37,7 +37,10 @@ SourceFiles
     PatchValueExpressionDriverI.H
     PatchValueExpressionDriver.C
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2009-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef PatchValueExpressionDriver_H
@@ -77,7 +80,11 @@ class PatchValueExpressionDriver
 {
     // Private data
 
+    //- the patch we're living on
     const fvPatch &patch_;
+
+    //- dictionary with the interpolation-schemes for mapping
+    dictionary mappingInterpolationSchemes_;
 
     // Private Member Functions
 
@@ -85,6 +92,30 @@ class PatchValueExpressionDriver
     void operator=(const PatchValueExpressionDriver&);
 
     static word driverName_;
+
+    //- give back an interpolation-scheme specified by name and type
+    template<class Type>
+    const interpolation<Type> &getInterpolation(
+        const GeometricField< Type, fvPatchField, volMesh > &psi
+    );
+
+    //- get the specification of the interpolations by name
+    const word getInterpolationScheme(const word &name);
+
+    //- HashPtrTable of interpolations
+    HashPtrTable<interpolation<scalar> > interpolationScalar_;
+    HashPtrTable<interpolation<vector> > interpolationVector_;
+    HashPtrTable<interpolation<tensor> > interpolationTensor_;
+    HashPtrTable<interpolation<symmTensor> > interpolationSymmTensor_;
+    HashPtrTable<interpolation<sphericalTensor> > interpolationSphericalTensor_;
+
+    //- table with the interpolation scheme (depending on the type)
+    template <class Type>
+    HashPtrTable<interpolation<Type> > &interpolations();
+
+    //- map a field that is as long as the patch
+    template<class T>
+    tmp<Field<T> > mapField(tmp<Field<T> > orig);
 
 protected:
 
@@ -116,6 +147,19 @@ protected:
     static const SymbolTable<PatchValueExpressionDriver> &symbolTable();
 
     int startupSymbol(const word &name);
+
+    //- check whether the patch maps from another one
+    autoPtr<ExpressionResult> getRemoteResult(
+        CommonValueExpressionDriver &otherDriver
+    );
+
+    //- weights of the entries if it is not a point field
+
+    //- parametert size is the expected size of the weight field and
+    //- will be used to determine whether this is correct.
+    virtual tmp<scalarField> weightsNonPoint(
+        label size
+    ) const;
 
 public:
 
@@ -168,44 +212,44 @@ public:
 
     // Member Functions
 
-    vectorField *makePositionField();
+    tmp<vectorField> makePositionField();
 
-    vectorField *makePointField();
+    tmp<vectorField> makePointField();
 
-    vectorField *makeFaceNormalField();
+    tmp<vectorField> makeFaceNormalField();
 
-    vectorField *makeFaceAreaField();
+    tmp<vectorField> makeFaceAreaField();
 
-    vectorField *makeCellNeighbourField();
+    tmp<vectorField> makeCellNeighbourField();
 
-    vectorField *makeDeltaField();
+    tmp<vectorField> makeDeltaField();
 
-    scalarField *makeWeightsField();
+    tmp<scalarField> makeWeightsField();
 
-    scalarField *makeFaceIdField();
+    tmp<scalarField> makeFaceIdField();
 
-    scalarField *makeNearDistField();
-
-    template<class Type>
-    Field<Type> *getField(const string &name);
+    tmp<scalarField> makeNearDistField();
 
     template<class Type>
-    Field<Type> *getOldTimeField(const string &name);
+    tmp<Field<Type> > getField(const string &name);
 
     template<class Type>
-    Field<Type> *getSurfaceNormalField(const string &name);
+    tmp<Field<Type> > getOldTimeField(const string &name);
 
     template<class Type>
-    Field<Type> *getPatchInternalField(const string &name);
+    tmp<Field<Type> > getSurfaceNormalField(const string &name);
 
     template<class Type>
-    Field<Type> *getPatchNeighbourField(const string &name);
+    tmp<Field<Type> > getPatchInternalField(const string &name);
 
     template<class Type>
-    Field<Type> *toFace(const Field<Type> &);
+    tmp<Field<Type> > getPatchNeighbourField(const string &name);
 
     template<class Type>
-    Field<Type> *toPoint(const Field<Type> &);
+    tmp<Field<Type> > toFace(const Field<Type> &);
+
+    template<class Type>
+    tmp<Field<Type> > toPoint(const Field<Type> &);
 
     //- return a new plugin-function
     virtual autoPtr<CommonPluginFunction> newPluginFunction(
@@ -216,6 +260,14 @@ public:
     virtual bool existsPluginFunction(
         const word &name
     );
+
+    //- for a mapped patch returns the mapped field from "the other side""
+    template<class T>
+    tmp<Field<T> > mapField(const word &name,bool internalField=false);
+
+    //- for a mapped point-patch returns the mapped field from "the other side""
+    template<class T>
+    tmp<Field<T> > mapPointField(const word &name);
 
     // allow access of protected methods
     friend class parserPatch::PatchValueExpressionParser;

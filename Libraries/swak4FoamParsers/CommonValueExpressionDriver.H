@@ -37,7 +37,10 @@ SourceFiles
     CommonValueExpressionDriverI.H
     CommonValueExpressionDriver.C
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2010-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef CommonValueExpressionDriver_H
@@ -53,6 +56,8 @@ SourceFiles
 #include "ExpressionResult.H"
 #include "StoredExpressionResult.H"
 #include "DelayedExpressionResult.H"
+
+#include "MeshesRepository.H"
 
 namespace Foam
 {
@@ -97,6 +102,9 @@ class CommonValueExpressionDriver
     //- string that allows more detailed allocation of the context
     string contextString_;
 
+    //- string that stores the name of the other mesh (if that is going to be used)
+    word otherMeshName_;
+
 protected:
     //- get the string of the context in a form that is usable for an error message
     std::string getContextString();
@@ -111,6 +119,11 @@ protected:
 
     //- access last position
     label &parserLastPos() { return parserLastPos_; }
+
+    //- get the result from another driver. Overrideable to allow mapping
+    virtual autoPtr<ExpressionResult> getRemoteResult(
+        CommonValueExpressionDriver &otherDriver
+    );
 
 private:
     ExpressionResult result_;
@@ -139,11 +152,9 @@ protected:
     const ExpressionResult &lookupGlobal(const word &name) const;
 
     template<class T>
-    bool isGlobal(const word &name,bool isPoint) const;
+    bool isGlobal(const word &name,bool isPoint,label expectedSize=-1) const;
 
     void setGlobalScopes(const wordList &);
-
-    ExpressionResult &result() { return result_; }
 
     //- scanner state for reentrant lexer
     void *scanner_;
@@ -155,7 +166,20 @@ protected:
     //- update stuff that needs updating
     virtual bool update();
 
+    //- weights of the entries if it is not a point field
+
+    //- parametert size is the expected size of the weight field and
+    //- will be used to determine whether this is correct.
+    virtual tmp<scalarField> weightsNonPoint(
+        label size
+    ) const = 0;
+
 public:
+
+    ExpressionResult &result() { return result_; }
+
+    const ExpressionResult &result() const { return result_; }
+
     const string &content() const { return content_; }
 
     //- actual size of the field
@@ -163,6 +187,20 @@ public:
 
     //- actual size of the supporting point-field
     virtual label pointSize() const = 0;
+
+    //- weights of the entries
+
+    //- parametert size is the expected size of the weight field and
+    //- will be used to determine whether this is correct.
+    //- point determines whether this is a point field or not
+    tmp<scalarField> weights(
+        label size,
+        bool point=false
+    ) const;
+
+   //- access the other mesh name
+    const word &otherMeshName() const { return otherMeshName_; }
+    word &otherMeshName() { return otherMeshName_; }
 
 protected:
     //- get the mesh we're living on
@@ -231,7 +269,13 @@ protected:
 
     inline bool prevIterIsOldTime() const { return prevIterIsOldTime_; }
 
+    string getTypeOfFieldInternal(
+        const fvMesh &mesh,
+        const string &name
+    ) const;
+
     string getTypeOfField(const string &name) const;
+
     string getTypeOfSet(const string &name) const;
 
     template<class T,class Mesh>
@@ -249,10 +293,18 @@ protected:
     };
 
     template<class T>
-    inline autoPtr<T> getSet(const fvMesh &,const word &,SetOrigin &origin);
+    inline autoPtr<T> getSet(
+        const fvMesh &,
+        const word &,
+        SetOrigin &origin
+    ) const;
 
     template<class T>
-    inline bool updateSet(autoPtr<T> &theSet,const word &,SetOrigin origin);
+    inline bool updateSet(
+        autoPtr<T> &theSet,
+        const word &,
+        SetOrigin origin
+    ) const;
 
     template<class T>
     autoPtr<T> getOrReadField(
@@ -400,7 +452,14 @@ public:
         const string &expr
     );
 
-    //- read the list of variable strings (or initialize with a single string)
+    //- calculate the weighted average of a field
+    template<class Type>
+    Type calcWeightedAverage(const Field<Type> &f) const;
+
+    //- read information about the foreign meshes and create them
+    static label readForeignMeshInfo(const dictionary &dict,bool verbose=true);
+
+   //- read the list of variable strings (or initialize with a single string)
     static stringList readVariableStrings(const dictionary &dict);
 
     //- read the list of variable strings (or initialize with a single string)
@@ -434,27 +493,39 @@ public:
     void clearResult();
 
     template <class Op,class Type>
-    Field<bool> *doCompare(Field<Type> *a,Op op,Field<Type> *b);
+    tmp<Field<bool> > doCompare(
+        const Field<Type> &a,
+        Op op,
+        const Field<Type> &b
+    );
 
     template <class Op>
-    Field<bool> *doLogicalOp(Field<bool> *a,Op op,Field<bool> *b);
+    tmp<Field<bool> > doLogicalOp(
+        const Field<bool> &a,
+        Op op,
+        const Field<bool> &b
+    );
 
-    inline Field<bool> *doLogicalNot(Field<bool> *a);
+    inline tmp<Field<bool> > doLogicalNot(const Field<bool> &a);
 
     template<class Type>
-    Field<Type> *doConditional(Field<bool> *d,Field<Type> *yes,Field<Type> *no);
+    tmp<Field<Type> > doConditional(
+        const Field<bool> &d,
+        const Field<Type> &yes,
+        const Field<Type> &no
+    );
 
     template<class Type>
-    Field<Type> *makeField(Type,bool isPoint=false);
+    tmp<Field<Type> > makeField(Type,bool isPoint=false);
 
 //     template<class Type>
-//     Field<Type> *getField(const string &name);
+//     tmp<Field<Type> > getField(const string &name);
 
     template<class Type>
     bool is(const string &name,bool isPoint=false) const;
 
     template<class Type>
-    bool isVariable(const string &name,bool isPoint=false) const;
+    bool isVariable(const string &name,bool isPoint=false,label expectSize=-1) const;
 
     template<class Type>
     bool isField(const string &name,bool isPoint=false) const;
@@ -467,7 +538,7 @@ public:
     inline bool isLine(const string &name) const;
 
     //- get the value for a timeline for a specific time
-    scalarField *getLine(const string &name,scalar t);
+    tmp<scalarField> getLine(const string &name,scalar t);
 
     //- value of the timeline
     scalar getLineValue(const string &name,scalar t);
@@ -478,6 +549,22 @@ public:
         HashTable<interpolationTable<scalar> > &,
         bool clear=true
     );
+
+    //- is this mesh in the repository
+    bool isForeignMesh(const word &name) const;
+
+    template<class T>
+    bool isForeignField(
+        const word &meshName,
+        const word &fieldName
+    ) const;
+
+    template<class T>
+    tmp<T> interpolateForeignField(
+        const word &meshName,
+        const word &fieldName,
+        meshToMesh::order theOrder=meshToMesh::INTERPOLATE
+    ) const;
 
     //- read all the interpolation tables known to man
     void readTables(const dictionary &);
@@ -497,9 +584,12 @@ public:
     //- get the value for a lookuptable for a set of values
     tmp<scalarField> getLookup(const string &name,const scalarField &val);
 
-    scalarField *makeModuloField(const scalarField &a,const scalarField &b);
-    scalarField *makeRandomField(label seed=0);
-    scalarField *makeGaussRandomField(label seed=0);
+    tmp<scalarField> makeModuloField(
+        const scalarField &a,
+        const scalarField &b
+    ) const;
+    tmp<scalarField> makeRandomField(label seed=0) const;
+    tmp<scalarField> makeGaussRandomField(label seed=0) const;
 
     vector getPositionOfMinimum(const scalarField &,const vectorField &) const;
 
@@ -507,18 +597,24 @@ public:
 
     const Time& runTime() const;
 
-    vectorField *composeVectorField(scalarField *,scalarField *,scalarField *);
-
-    tensorField *composeTensorField(scalarField *,scalarField *,scalarField *,
-                                    scalarField *,scalarField *,scalarField *,
-                                    scalarField *,scalarField *,scalarField *);
-
-    symmTensorField *composeSymmTensorField(
-        scalarField *,scalarField *,scalarField *,
-        scalarField *,scalarField *,scalarField *
+    tmp<vectorField> composeVectorField(
+        const scalarField &,
+        const scalarField &,
+        const scalarField &
     );
 
-    sphericalTensorField *composeSphericalTensorField(scalarField *);
+    tmp<tensorField> composeTensorField(
+        const scalarField &,const scalarField &,const scalarField &,
+        const scalarField &,const scalarField &,const scalarField &,
+        const scalarField &,const scalarField &,const scalarField &
+    );
+
+    tmp<symmTensorField> composeSymmTensorField(
+        const scalarField &,const scalarField &,const scalarField &,
+        const scalarField &,const scalarField &,const scalarField &
+    );
+
+    tmp<sphericalTensorField> composeSphericalTensorField(const scalarField &);
 
     // Error handling.
 

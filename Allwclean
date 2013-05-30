@@ -1,8 +1,8 @@
-#! /bin/sh
+#! /bin/bash
 
 if [ -e swakConfiguration ]; then
     echo "Reading variables from 'swakConfiguration'"
-    source swakConfiguration
+    source ./swakConfiguration
 fi
 
 (cd Libraries; ./Allwclean )

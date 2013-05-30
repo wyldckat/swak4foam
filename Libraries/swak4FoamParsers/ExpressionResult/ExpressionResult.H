@@ -38,13 +38,17 @@ SourceFiles
     ExpressionResult.C
     ExpressionResultIO.C
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2012-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #ifndef ExpressionResult_H
 #define ExpressionResult_H
 
-#include "foamVersion4swak.H"
+#include "swak.H"
+
 #if (FOAM_VERSION4SWAK_MAJOR < 2)
 #error "This swak4Foam-version is only used for the 2.x-versions of OpenFOAM. For lower versions there is a special branch"
 #endif
@@ -63,6 +67,8 @@ namespace Foam
 \*---------------------------------------------------------------------------*/
 
 class ExpressionResult
+:
+    public refCount
 {
     // Private data
 
@@ -76,6 +82,9 @@ class ExpressionResult
 
     //- alternative if anything different than a plain field should be stored
     autoPtr<IOobject> generalContent_;
+
+    //- size if an object is stored
+    label objectSize_;
 
     void uglyDelete();
 
@@ -115,7 +124,7 @@ public:
     ExpressionResult(const ExpressionResult&);
 
     //- Construct from a dictionary
-    ExpressionResult(const dictionary&,bool isSingleValue=false);
+    ExpressionResult(const dictionary&,bool isSingleValue=false,bool needsValue=false);
 
     //- Construct from a field
     template<class Type>
@@ -178,6 +187,7 @@ public:
 
     void clearResult();
 
+    //- basic type that the enclosed Field is a type of
     inline const string &valueType() const;
 
     inline bool isPoint() const;
@@ -199,6 +209,11 @@ public:
     friend ExpressionResult operator+(
         const ExpressionResult &,const ExpressionResult &
     );
+
+    //- get the address of the field as a decimal string
+
+    //- Currently only needed for the python integrtation
+    word getAddressAsDecimal() const;
 };
 
 

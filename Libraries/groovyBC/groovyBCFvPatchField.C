@@ -28,7 +28,10 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2009-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "groovyBCFvPatchField.H"
@@ -110,6 +113,10 @@ groovyBCFvPatchField<Type>::groovyBCFvPatchField
         (
             Field<Type>("value", dict, p.size())
         );
+	if (!dict.found("refValue")) {
+ 	    // make sure that refValue has a sensible value for the "update" below
+	    this->refValue() = Field<Type>("value", dict, p.size());
+	}
     }
     else
     {

@@ -28,7 +28,10 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2012-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "ExpressionResult.H"
@@ -45,10 +48,12 @@ defineTypeNameAndDebug(ExpressionResult,0);
 
 ExpressionResult::ExpressionResult()
 :
+    refCount(),
     valType_("None"),
     valPtr_(NULL),
     isPoint_(false),
-    isSingleValue_(true)
+    isSingleValue_(true),
+    objectSize_(-1)
 {
     if(debug) {
         Info << "ExpressionResult::ExpressionResult()" << endl;
@@ -58,10 +63,12 @@ ExpressionResult::ExpressionResult()
 
 ExpressionResult::ExpressionResult(const ExpressionResult &rhs)
 :
+    refCount(),
     valType_("None"),
     valPtr_(NULL),
     isPoint_(false),
-    isSingleValue_(true)
+    isSingleValue_(true),
+    objectSize_(-1)
 {
     if(debug) {
         Info << "ExpressionResult::ExpressionResult(const ExpressionResult &rhs)" << endl;
@@ -72,15 +79,18 @@ ExpressionResult::ExpressionResult(const ExpressionResult &rhs)
 
 ExpressionResult::ExpressionResult(
     const dictionary &dict,
-    bool isSingleValue
+    bool isSingleValue,
+    bool needsValue
 )
 :
+    refCount(),
     valType_(dict.lookupOrDefault<word>("valueType","None")),
     valPtr_(NULL),
     isPoint_(dict.lookupOrDefault<bool>("isPoint",false)),
     isSingleValue_(
         dict.lookupOrDefault<bool>("isSingleValue",isSingleValue)
-    )
+    ),
+    objectSize_(-1)
 {
     if(debug) {
         Info << "ExpressionResult::ExpressionResult(const dictionary &dict,bool isSingleValue)" << endl;
@@ -125,6 +135,13 @@ ExpressionResult::ExpressionResult(
                         << exit(FatalError);
             }
         }
+    } else if(needsValue) {
+        FatalErrorIn("ExpressionResult::ExpressionResult(const dictionary &dict,bool isSingleValue)")
+            << "No entry 'value' defined in " << dict.name() << endl
+                << dict
+                << endl
+                << exit(FatalError);
+
     }
 }
 
@@ -160,6 +177,8 @@ void ExpressionResult::clearResult()
         Info << "ExpressionResult: Clearing object" << endl;
     }
     generalContent_.reset();
+    objectSize_=-1;
+
     if(debug) {
         Info << "ExpressionResult: Clearing result - done" << endl;
     }
@@ -264,12 +283,17 @@ label ExpressionResult::size() const {
         }
     } else {
         // this is an object
-        return -1;
+        return objectSize_;
     }
 }
 
 void ExpressionResult::operator=(const ExpressionResult& rhs)
 {
+    if(debug) {
+        Info << "ExpressionResult::operator=(const ExpressionResult& rhs)"
+            << endl;
+        Info << "Rhs: " << rhs << endl;
+    }
     // Check for assignment to self
     if (this == &rhs)
     {
@@ -283,6 +307,7 @@ void ExpressionResult::operator=(const ExpressionResult& rhs)
     valType_=rhs.valType_;
     isPoint_=rhs.isPoint_;
     isSingleValue_=rhs.isSingleValue_;
+    objectSize_=-1;
 
     if( rhs.valPtr_ ) {
         if(valType_==pTraits<scalar>::typeName) {
@@ -325,6 +350,13 @@ void ExpressionResult::operator=(const ExpressionResult& rhs)
         }
     } else {
         valPtr_=rhs.valPtr_;
+        if(generalContent_.valid()) {
+            FatalErrorIn("ExpressionResult::operator=(const ExpressionResult& rhs)")
+                << "Assignment with general content not possible"
+                    << endl
+                    << exit(FatalError);
+
+        }
     }
 
 //     const_cast<ExpressionResult &>(rhs).valPtr_=NULL;
@@ -489,6 +521,30 @@ ExpressionResult operator+(
                 << exit(FatalError);
     }
     return result;
+}
+
+word ExpressionResult::getAddressAsDecimal() const
+{
+    std::ostringstream makeDec;
+     if(valType_==pTraits<scalar>::typeName) {
+         makeDec << (*static_cast<scalarField*>(valPtr_)).cdata();
+     } else if(valType_==pTraits<vector>::typeName) {
+         makeDec << (*static_cast<Field<vector>*>(valPtr_)).cdata();
+     } else if(valType_==pTraits<tensor>::typeName) {
+         makeDec << (*static_cast<Field<tensor>*>(valPtr_)).cdata();
+     } else if(valType_==pTraits<symmTensor>::typeName) {
+         makeDec << (*static_cast<Field<symmTensor>*>(valPtr_)).cdata();
+     } else if(valType_==pTraits<sphericalTensor>::typeName) {
+         makeDec << (*static_cast<Field<sphericalTensor>*>(valPtr_)).cdata();
+     } else {
+         FatalErrorIn("ExpressionResult::getAddressAsDecimal")
+             << "Unsupported type"
+                 << valType_
+                 << endl
+                 << exit(FatalError);
+     }
+
+    return word(makeDec.str());
 }
 
 // * * * * * * * * * * * * * * * Friend Operators  * * * * * * * * * * * * * //

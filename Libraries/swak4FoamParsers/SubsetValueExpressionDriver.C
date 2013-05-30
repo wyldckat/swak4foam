@@ -28,7 +28,10 @@ License
     along with OpenFOAM; if not, write to the Free Software Foundation,
     Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2010-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "SubsetValueExpressionDriver.H"
@@ -91,39 +94,41 @@ void SubsetValueExpressionDriver::parseInternal (int startToken)
     parser.parse ();
 }
 
-scalarField *SubsetValueExpressionDriver::makeIdField()
+tmp<scalarField> SubsetValueExpressionDriver::makeIdField()
 {
-    scalarField *ids=new scalarField(this->size());
-    forAll(*ids,i) {
-        (*ids)[i]=i;
+    tmp<scalarField> ids(
+        new scalarField(this->size())
+    );
+    forAll(ids(),i) {
+        ids()[i]=i;
     }
     return ids;
 }
 
-vectorField *SubsetValueExpressionDriver::makePositionField()
+tmp<vectorField> SubsetValueExpressionDriver::makePositionField() const
 {
     notImplemented("SubsetValueExpressionDriver::makePositionField");
 
-    return new vectorField(0);
+    return tmp<vectorField>(new vectorField(0));
 }
 
-// vectorField *SubsetValueExpressionDriver::makePointField()
+// tmp<vectorField> SubsetValueExpressionDriver::makePointField() const
 // {
 //     notImplemented("SubsetValueExpressionDriver::makePointField");
 // }
 
-vectorField *SubsetValueExpressionDriver::makeFaceNormalField()
+tmp<vectorField> SubsetValueExpressionDriver::makeFaceNormalField() const
 {
     notImplemented("SubsetValueExpressionDriver::makeFaceNormalField");
 
-    return new vectorField(0);
+    return tmp<vectorField>(new vectorField(0));
 }
 
-vectorField *SubsetValueExpressionDriver::makeFaceAreaField()
+tmp<vectorField> SubsetValueExpressionDriver::makeFaceAreaField() const
 {
     notImplemented("SubsetValueExpressionDriver::makeFaceAreaField");
 
-    return new vectorField(0);
+    return tmp<vectorField>(new vectorField(0));
 }
 
 template<>

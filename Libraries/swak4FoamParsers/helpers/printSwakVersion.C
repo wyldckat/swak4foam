@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------*\
- ##   ####  ######     | 
+ ##   ####  ######     |
  ##  ##     ##         | Copyright: ICE Stroemungsfoschungs GmbH
  ##  ##     ####       |
  ##  ##     ##         | http://www.ice-sf.at
@@ -34,11 +34,14 @@ Class
 Description
     print a little banner with the swak-version to ease support
 
- ICE Revision: $Id$ 
+Contributors/Copyright:
+    2012-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "printSwakVersion.H"
-#include "swakVersion.H"
+#include "swak.H"
 
 namespace Foam {
     void printSwakVersion() {

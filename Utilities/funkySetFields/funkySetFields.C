@@ -33,7 +33,10 @@ Application
 
 Description
 
- ICE Revision: $Id$
+Contributors/Copyright:
+    2006-2013 Bernhard F.W. Gschaider <bgschaid@ice-sf.at>
+
+ SWAK Revision: $Id$
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
@@ -152,6 +155,7 @@ void setField
         valuePatches
     );
 }
+
 void doAnExpression
 (
     const fvMesh &mesh,
@@ -165,7 +169,8 @@ void doAnExpression
     const dictionary &dict,
     const dimensionSet &dim,
     bool keepPatches,
-    const wordList &valuePatches
+    const wordList &valuePatches,
+    const bool correctPatches
 ) {
     const string &time = runTime.timeName();
     word oldFieldType="none";
@@ -256,13 +261,13 @@ void doAnExpression
         }
 
         if(driver.resultIsTyp<volScalarField>(true)) {
-            conditionField=driver.getResult<volScalarField>().internalField();
+            conditionField=driver.getResult<volScalarField>(correctPatches).internalField();
             conditionIsSurface=false;
         } else if(driver.resultIsTyp<surfaceScalarField>(true)){
-            conditionField=driver.getResult<surfaceScalarField>().internalField();
+            conditionField=driver.getResult<surfaceScalarField>(correctPatches).internalField();
             conditionIsSurface=true;
         } else {
-            conditionField=driver.getResult<pointScalarField>().internalField();
+            conditionField=driver.getResult<pointScalarField>(correctPatches).internalField();
             conditionIsPoint=true;
         }
     }
@@ -364,7 +369,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<volScalarField>(),
+                driver.getResult<volScalarField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -376,7 +381,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<volVectorField>(),
+                driver.getResult<volVectorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -388,7 +393,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<volTensorField>(),
+                driver.getResult<volTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -400,7 +405,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<volSymmTensorField>(),
+                driver.getResult<volSymmTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -412,7 +417,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<volSphericalTensorField>(),
+                driver.getResult<volSphericalTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -424,7 +429,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<surfaceScalarField>(),
+                driver.getResult<surfaceScalarField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -436,7 +441,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<surfaceVectorField>(),
+                driver.getResult<surfaceVectorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -448,7 +453,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<surfaceTensorField>(),
+                driver.getResult<surfaceTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -460,7 +465,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<surfaceSymmTensorField>(),
+                driver.getResult<surfaceSymmTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -472,7 +477,7 @@ void doAnExpression
                 field,
                 mesh,
                 time,
-                driver.getResult<surfaceSphericalTensorField>(),
+                driver.getResult<surfaceSphericalTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -485,7 +490,7 @@ void doAnExpression
                 mesh,
                 pMesh,
                 time,
-                driver.getResult<pointScalarField>(),
+                driver.getResult<pointScalarField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -498,7 +503,7 @@ void doAnExpression
                 mesh,
                 pMesh,
                 time,
-                driver.getResult<pointVectorField>(),
+                driver.getResult<pointVectorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -511,7 +516,7 @@ void doAnExpression
                 mesh,
                 pMesh,
                 time,
-                driver.getResult<pointTensorField>(),
+                driver.getResult<pointTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -524,7 +529,7 @@ void doAnExpression
                 mesh,
                 pMesh,
                 time,
-                driver.getResult<pointSymmTensorField>(),
+                driver.getResult<pointSymmTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -537,7 +542,7 @@ void doAnExpression
                 mesh,
                 pMesh,
                 time,
-                driver.getResult<pointSphericalTensorField>(),
+                driver.getResult<pointSphericalTensorField>(correctPatches),
                 conditionField,
                 create,
                 dim,
@@ -556,35 +561,40 @@ void doAnExpression
 
 template<class FieldType>
 void preLoadFieldsFunction(
-    const fvMesh &mesh,
+    const DynamicList<fvMesh*> &meshes,
     const wordList &fieldNames,
     PtrList<FieldType> &fieldList
 )
 {
-    forAll(fieldNames,i) {
-        const word &name=fieldNames[i];
+    forAll(meshes,m) {
+        const fvMesh &mesh=*(meshes[m]);
 
-        IOobject fieldHeader
-        (
-            name,
-            mesh.time().timeName(),
-            mesh,
-            IOobject::MUST_READ,
-            IOobject::AUTO_WRITE
-        );
+        forAll(fieldNames,i) {
+            const word &name=fieldNames[i];
 
-        if
-        (
-            fieldHeader.headerOk()
-         && fieldHeader.headerClassName() == pTraits<FieldType>::typeName
-        )
-        {
-            Info << " Preloading " << name << " of type "
-                << pTraits<FieldType>::typeName << endl;
+            IOobject fieldHeader
+                (
+                    name,
+                    mesh.time().timeName(),
+                    mesh,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                );
 
-            label sz=fieldList.size();
-            fieldList.setSize(sz+1);
-            fieldList.set(sz, new FieldType(fieldHeader, mesh));
+            if
+            (
+                fieldHeader.headerOk()
+                && fieldHeader.headerClassName() == pTraits<FieldType>::typeName
+            )
+            {
+                Info << " Preloading " << name << " of type "
+                    << pTraits<FieldType>::typeName
+                    << " for mesh " << mesh.name() << endl;
+
+                label sz=fieldList.size();
+                fieldList.setSize(sz+1);
+                fieldList.set(sz, new FieldType(fieldHeader, mesh));
+            }
         }
     }
 }
@@ -598,18 +608,27 @@ int main(int argc, char *argv[])
 
 #   include "addRegionOption.H"
 
-    argList::validOptions.insert("field","<field to overwrite>");
-    argList::validOptions.insert("expression","<expression to write>");
-    argList::validOptions.insert("condition","<logical condition>");
-    argList::validOptions.insert("dimension","<dimension of created field>");
+    argList::validOptions.insert("field","field to overwrite");
+    argList::validOptions.insert("expression","expression to write");
+    argList::validOptions.insert("condition","logical condition");
+    argList::validOptions.insert("dimension","dimension of created field");
     argList::validOptions.insert("debugParser","");
     argList::validOptions.insert("noCacheVariables","");
     argList::validOptions.insert("create","");
     argList::validOptions.insert("keepPatches","");
-    argList::validOptions.insert("valuePatches","<list of patches that get a fixed value>");
-    argList::validOptions.insert("dictExt","<extension to the default funkySetFieldsDict-dictionary>");
+    argList::validOptions.insert("valuePatches","list of patches that get a fixed value");
+    argList::validOptions.insert("dictExt","extension to the default funkySetFieldsDict-dictionary");
     argList::validOptions.insert("allowFunctionObjects","");
     argList::validOptions.insert("addDummyPhi","");
+    argList::validOptions.insert("otherCase","path to other case");
+    argList::validOptions.insert("otherRegion","region in other case");
+    argList::validOptions.insert("otherAdditionalRegions","region in other case that may be needed by coupled boundary conditions");
+    argList::validOptions.insert("additionalRegions","regions that may be needed by coupled boundary conditions");
+    argList::validOptions.insert("otherTime","time to use in other case");
+    argList::validOptions.insert("otherHasSameTime","");
+    argList::validOptions.insert("otherInterpolateOrder","order");
+    argList::validOptions.insert("preloadFields","List of fields to preload");
+    argList::validOptions.insert("noCorrectPatches","");
 
 #   include "setRootCase.H"
 
@@ -632,17 +651,149 @@ int main(int argc, char *argv[])
 
 #   include "createNamedMesh.H"
 
+    DynamicList<fvMesh*> allMeshes;
+    allMeshes.append(&mesh);
+
+    PtrList<fvMesh> additionalRegions;
+
+    bool correctPatches=true;
+
+    if (args.options().found("noCorrectPatches")) {
+        correctPatches=false;
+    }
+
+    if (args.options().found("additionalRegions")) {
+        string regionsString(args.options()["additionalRegions"]);
+        IStringStream regionsStream("("+regionsString+")");
+        wordList additionalRegionsNames(regionsStream);
+
+        additionalRegions.resize(additionalRegionsNames.size());
+        forAll(additionalRegionsNames,i)
+        {
+            const word &region=additionalRegionsNames[i];
+
+            Info << "Loading additional mesh region " << region << endl;
+
+            additionalRegions.set(
+                i,
+                new fvMesh(
+                    IOobject(
+                        region,
+                        runTime.timeName(),
+                        runTime,
+                        Foam::IOobject::MUST_READ
+                    )
+                )
+            );
+
+            allMeshes.append(&(additionalRegions[i]));
+        }
+    }
+
     if(!args.options().found("allowFunctionObjects")) {
         runTime.functionObjects().off();
     }
+
+    bool otherHasSameTime=args.options().found("otherHasSameTime");
+    wordList otherAdditionalRegions;
+
+    if(args.options().found("otherCase")) {
+        word otherRegion(polyMesh::defaultRegion);
+        if(args.options().found("otherRegion")) {
+            otherRegion=word(args.options()["otherRegion"]);
+        }
+        string otherTime;
+        if(!otherHasSameTime) {
+            otherTime=string(args.options()["otherTime"]);
+        }
+        fileName otherCase(args.options()["otherCase"]);
+
+        Info<< "Adding case " << otherCase << ", region "
+            << otherRegion;
+        if(otherHasSameTime) {
+            Info << " with same time as 'real' time. ";
+        } else {
+            Info<< " at t=" << otherTime << ". ";
+        }
+        Info<< "Fields from that case can be accessed in expression with "
+            << "'other(<field>)'\n" << endl;
+
+        fvMesh &other=MeshesRepository::getRepository().addMesh(
+            "other",
+            otherCase,
+            otherRegion
+        );
+        allMeshes.append(&(other));
+
+        if (args.options().found("otherAdditionalRegions")) {
+            string regionsString(args.options()["otherAdditionalRegions"]);
+            IStringStream regionsStream("("+regionsString+")");
+            otherAdditionalRegions=wordList(regionsStream);
+        }
+
+        forAll(otherAdditionalRegions,regionI) {
+            const word &name=otherAdditionalRegions[regionI];
+            Info << "Adding region " << name << " from other case" << endl;
+
+            fvMesh &added=MeshesRepository::getRepository().addCoupledMesh(
+                "other_"+name,
+                "other",
+                name
+            );
+            allMeshes.append(&(added));
+        }
+
+        if(args.options().found("otherInterpolateOrder")) {
+            MeshesRepository::getRepository().setInterpolationOrder(
+                "other",
+                MeshInterpolationOrder::names[
+                    args.options()["otherInterpolateOrder"]
+                ]
+            );
+        }
+
+        if(!otherHasSameTime) {
+            scalar time=MeshesRepository::getRepository().setTime(
+                "other",
+                otherTime
+            );
+            Info << "Actually using time " << time << " in other case\n"
+                << endl;
+        }
+    } else if(
+        args.options().found("otherRegion")
+        ||
+        args.options().found("otherTime")
+        ||
+        args.options().found("otherAdditionalRegions")
+        ||
+        otherHasSameTime
+    ) {
+        FatalErrorIn(args.executable())
+            << "'otherCase' not specified"
+                << endl
+                << exit(FatalError);
+
+    }
+
+    allMeshes.shrink();
 
     forAll(timeDirs, timeI)
     {
         runTime.setTime(timeDirs[timeI], timeI);
 
-        Foam::Info<< "Time = " << runTime.timeName() << Foam::endl;
+        Foam::Info<< "\nTime = " << runTime.timeName() << Foam::endl;
 
         mesh.readUpdate();
+
+        if(otherHasSameTime) {
+            scalar time=MeshesRepository::getRepository().setTime(
+                "other",
+                runTime.timeName(),
+                timeI
+            );
+            Info << "Other mesh set to time " << time << endl;
+        }
 
         if(args.options().found("addDummyPhi")) {
             Info << "Adding a dummy phi to make inletOutlet happy" << endl;
@@ -709,6 +860,38 @@ int main(int argc, char *argv[])
             IStringStream valuePatchesStream("("+valuePatchesString+")");
             wordList valuePatches(valuePatchesStream);
 
+            PtrList<volScalarField> vsf;
+            PtrList<volVectorField> vvf;
+            PtrList<volTensorField> vtf;
+            PtrList<volSymmTensorField> vyf;
+            PtrList<volSphericalTensorField> vhf;
+
+            PtrList<surfaceScalarField> ssf;
+            PtrList<surfaceVectorField> svf;
+            PtrList<surfaceTensorField> stf;
+            PtrList<surfaceSymmTensorField> syf;
+            PtrList<surfaceSphericalTensorField> shf;
+
+            if(args.options().found("preloadFields")) {
+                IStringStream preloadStream(
+                    "("+args.options()["preloadFields"]+")"
+                );
+
+                wordList preLoadFields(preloadStream);
+
+                preLoadFieldsFunction(allMeshes,preLoadFields,vsf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,vvf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,vtf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,vyf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,vhf);
+
+                preLoadFieldsFunction(allMeshes,preLoadFields,ssf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,svf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,stf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,syf);
+                preLoadFieldsFunction(allMeshes,preLoadFields,shf);
+            }
+
             dictionary dummyDict;
 
             doAnExpression(
@@ -723,7 +906,8 @@ int main(int argc, char *argv[])
                 dummyDict,
                 dim,
                 keepPatches,
-                valuePatches
+                valuePatches,
+                correctPatches
             );
         } else {
             Info << " Using funkySetFieldsDict \n" << endl;
@@ -791,17 +975,17 @@ int main(int argc, char *argv[])
                 if(part.found("preloadFields")) {
                     wordList preLoadFields(part.lookup("preloadFields"));
 
-                    preLoadFieldsFunction(mesh,preLoadFields,vsf);
-                    preLoadFieldsFunction(mesh,preLoadFields,vvf);
-                    preLoadFieldsFunction(mesh,preLoadFields,vtf);
-                    preLoadFieldsFunction(mesh,preLoadFields,vyf);
-                    preLoadFieldsFunction(mesh,preLoadFields,vhf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,vsf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,vvf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,vtf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,vyf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,vhf);
 
-                    preLoadFieldsFunction(mesh,preLoadFields,ssf);
-                    preLoadFieldsFunction(mesh,preLoadFields,svf);
-                    preLoadFieldsFunction(mesh,preLoadFields,stf);
-                    preLoadFieldsFunction(mesh,preLoadFields,syf);
-                    preLoadFieldsFunction(mesh,preLoadFields,shf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,ssf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,svf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,stf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,syf);
+                    preLoadFieldsFunction(allMeshes,preLoadFields,shf);
                 }
 
                 word field=part["field"];
@@ -852,7 +1036,8 @@ int main(int argc, char *argv[])
                     part,
                     dim,
                     keepPatches,
-                    valuePatches
+                    valuePatches,
+                    correctPatches
                 );
             }
         }
