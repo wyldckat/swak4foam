@@ -1,5 +1,4 @@
 repo: d14c0319d52c0f53e65844bba122846744687a4c
-node: 2e1a41a7e0ac58b2b8b14713ac3cbc2f38b98f61
+node: a825938cb3a3ad876e607f09e895e7e9b17d3b85
 branch: port_2.0.x
-latesttag: version_0.2.3_v2.x
-latesttagdistance: 1
+tag: version_0.2.4_v2.x

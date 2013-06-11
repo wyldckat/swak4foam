@@ -145,12 +145,12 @@ void Foam::swakCodedFunctionObject::injectSwakCode(const word &key,const string 
         // avoid inserting the stuff twice
         dict_.add(word(key+"Original"),codeValue);
     }
-     
+
     // doesn't work because of length restriction in IStringStream
     //            dict_.set("code",codePrefix+codeValue+codePostfix);
     dict_.set(
         primitiveEntry(key,token(string(pre+codeValue+post)))
-    );            
+    );
 }
 
 
@@ -162,7 +162,9 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
     forAll(swakToCodedNamespaces_,nameI) {
         const word name(swakToCodedNamespaces_[nameI]);
         const GlobalVariablesRepository::ResultTable &vars=
-            GlobalVariablesRepository::getGlobalVariables().getNamespace(
+            GlobalVariablesRepository::getGlobalVariables(
+                time_
+            ).getNamespace(
                name
             );
         if(verboseCode_) {
@@ -171,28 +173,28 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
 
         const word scopeName("swakGlobalNamespace_"+name);
         codePrefix+="GlobalVariablesRepository::ResultTable &"+scopeName
-            +"=GlobalVariablesRepository::getGlobalVariables().getNamespace(\""
+            +"=GlobalVariablesRepository::getGlobalVariables(mesh().time()).getNamespace(\""
             +name+"\");\n";
         forAllConstIter(
             GlobalVariablesRepository::ResultTable,
             vars,
             iter
         ) {
-            const ExpressionResult &val=(*iter);
+            const ExpressionResult &val=*(*iter);
             if(val.hasValue()) {
                 if(val.isSingleValue()) {
-                    codePrefix+=val.type()+" "+iter.key()
-                        +"("+scopeName+"[\""+iter.key()+"\"].getResult<"
-                        +val.type()+">(true)()[0]);\n";
+                    codePrefix+=val.valueType()+" "+iter.key()
+                        +"("+scopeName+"[\""+iter.key()+"\"]->getResult<"
+                        +val.valueType()+">(true)()[0]);\n";
                 } else {
-                    codePrefix+="Field<"+val.type()+"> "+iter.key()
-                        +"("+scopeName+"[\""+iter.key()+"\"].getResult<"
-                        +val.type()+">(true));\n";
+                    codePrefix+="Field<"+val.valueType()+"> "+iter.key()
+                        +"("+scopeName+"[\""+iter.key()+"\"]->getResult<"
+                        +val.valueType()+">(true));\n";
                 }
                 if(verboseCode_) {
-                    codePrefix+="Info << \"Got variable: " + iter.key() + ": \" << " 
+                    codePrefix+="Info << \"Got variable: " + iter.key() + ": \" << "
                         + iter.key() + " << \" from \" << "
-                        +scopeName+"[\""+iter.key()+"\"]" + "<< endl;\n";  
+                        +scopeName+"[\""+iter.key()+"\"]" + "<< endl;\n";
                 }
             } else {
                 codePrefix+="// Variable " + iter.key() + " has no value\n";
@@ -205,12 +207,12 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
     if(codedToSwakNamespace_!="") {
         forAll(codedToSwakVariables_,i) {
             word name=codedToSwakVariables_[i];
-            codePostfix+="GlobalVariablesRepository::getGlobalVariables().";
+            codePostfix+="GlobalVariablesRepository::getGlobalVariables(mesh().time()).";
             codePostfix+="addValue(\""+name+"\",\""+codedToSwakNamespace_+
                 "\",ExpressionResult("+name+"));\n";
             if(verboseCode_ && 0) {
                 codePostfix+="Info << \"Wrote " + name + " as: \" << "
-                    +"GlobalVariablesRepository::getGlobalVariables()."
+                    +"GlobalVariablesRepository::getGlobalVariables(mesh().time())."
                     +"getNamespace(\""+codedToSwakNamespace_+"\")"
                     +"[\""+name+"\"] << endl;\n";
             }
@@ -230,7 +232,7 @@ bool Foam::swakCodedFunctionObject::read(const dictionary& dict)
         "",
         "\n//swakStuff\n#include \"GlobalVariablesRepository.H\"\n"
     );
-    
+
     if(!env("SWAK4FOAM_SRC")) {
         FatalErrorIn("swakCodedFunctionObject::read(const dictionary& dict)")
             << "Compilation of the function object only works if "

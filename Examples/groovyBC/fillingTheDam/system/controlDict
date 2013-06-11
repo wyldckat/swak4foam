@@ -17,7 +17,8 @@ FoamFile
 
 application     interFoam;
 
-startFrom       startTime;
+// startFrom       startTime;
+startFrom       latestTime;
 
 startTime       0;
 
@@ -327,7 +328,8 @@ functions
                         startCode "";
                         executeCode "";
                         writeFile "$FOAM_CASE/system/calcFillingAtHeight.py";
-                        endFile $writeFile;
+                        endFile "$FOAM_CASE/system/calcFillingAtHeight.py";
+                        //                        endFile $writeFile;
                         swakToPythonNamespaces (
                             pythonStatistics
                         );

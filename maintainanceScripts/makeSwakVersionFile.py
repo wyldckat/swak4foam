@@ -6,7 +6,7 @@ import re
 
 from subprocess import Popen,PIPE
 try:
-    output = Popen(["hgg", "branch"], stdout=PIPE).communicate()[0]
+    output = Popen(["hg", "branch"], stdout=PIPE).communicate()[0]
     isPackage = (output.find("debian")==0)
 except OSError:
     # there is no mercurial
@@ -32,6 +32,8 @@ for l in readme.readlines():
         extension=" ".join(grp[1:])
 
 vmajor,vminor,vpatch=verstring.split(".")
+
+print "Swak version is %s.%s.%s" % (vmajor,vminor,vpatch)
 
 versionH=path.join(path.dirname(sys.argv[0]),
                    "..",
